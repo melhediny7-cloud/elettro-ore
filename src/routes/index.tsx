@@ -6,7 +6,7 @@ import { WorkerManagerView } from "../components/WorkerManagerView";
 import { DailyLogManager } from "../components/DailyLogManager";
 import { MonthlyReportView } from "../components/MonthlyReportView";
 import { SettingsView } from "../components/SettingsView";
-import { WorkLogEntry, WorkerProfile, fetchWorkLogs, fetchWorkers } from "../utils/api";
+import { WorkLogEntry, WorkerProfile, fetchWorkLogs, fetchWorkers, fetchAppSettings } from "../utils/api";
 import { Language, translations } from "../utils/i18n";
 
 export const Route = createFileRoute("/")({
@@ -41,7 +41,7 @@ function AppHome() {
     }
   };
 
-  // Load stored settings on client mount
+  // Load stored settings and cloud settings on client mount
   useEffect(() => {
     if (typeof window !== "undefined") {
       const storedCompany = localStorage.getItem("oralavoro_companyName");
@@ -56,6 +56,14 @@ function AppHome() {
       if (storedRole === "worker" || storedRole === "admin") setUserRole(storedRole);
       if (storedLang === "it" || storedLang === "ar") setLangState(storedLang);
     }
+
+    fetchAppSettings().then((settings) => {
+      if (settings) {
+        setCompanyName(settings.companyName);
+        setDefaultLocation(settings.defaultLocation);
+        setAdminPin(settings.adminPin);
+      }
+    }).catch(console.error);
   }, []);
 
   const handleSetUserRole = (role: "worker" | "admin") => {

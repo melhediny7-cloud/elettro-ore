@@ -57,8 +57,8 @@ export const Header: React.FC<HeaderProps> = ({
     setPinError(false);
 
     try {
-      const res = await verifyAdminPin(pinInput);
-      if (res.success) {
+      const isValid = await verifyAdminPin(pinInput);
+      if (isValid === true || (typeof isValid === "object" && (isValid as any)?.success)) {
         setUserRole("admin");
         setIsPinModalOpen(false);
         setActiveTab("lavoratori");
