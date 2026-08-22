@@ -159,26 +159,45 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // STRICT GPS & 3KM GEOFENCE REQUIREMENT FOR WORKERS
-    if (userRole === "worker") {
-      if (!formData.latitude || !formData.longitude) {
-        alert(
-          lang === "ar"
-            ? "⚠️ تنبيه أمني: لا يمكن تسجيل الساعات إلا بتحديد موقعك الجغرافي الفعلي (GPS). يرجى الضغط على زر (Rileva GPS) أولاً!"
-            : "⚠️ Posizione GPS Obbligatoria: Devi rilevare la tua posizione GPS attuale per registrare le ore di lavoro!"
-        );
-        return;
-      }
+    // AUTOMATIC GPS & STRICT 3KM GEOFENCE VERIFICATION
+    let currentLat = formData.latitude;
+    let currentLng = formData.longitude;
+    let currentAddr = formData.address;
 
-      const check = verifyWorkerGeofence(formData.latitude, formData.longitude, workplaceZone);
-      if (!check.allowed) {
-        alert(
-          lang === "ar"
-            ? `⚠️ تم رفض تسجيل الساعات: موقعك الجغرافي (${check.distanceKm} كم) خارج نطاق العمل المسموح به (${workplaceZone.radiusKm} كم من Cantiere). يجب التواجد داخل موقع العمل الفعلي!`
-            : `⚠️ Registrazione Rifiutata: Sei fuori dalla zona di lavoro autorizzata (Distanza: ${check.distanceKm} km > ${workplaceZone.radiusKm} km dal cantiere).`
-        );
+    if (!currentLat || !currentLng) {
+      if (typeof navigator !== "undefined" && navigator.geolocation) {
+        try {
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 10000,
+            });
+          });
+          currentLat = String(pos.coords.latitude);
+          currentLng = String(pos.coords.longitude);
+          currentAddr = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+        } catch (e) {
+          alert(
+            lang === "ar"
+              ? "⚠️ تنبيه أمني: لا يمكن تسجيل الساعات بدون تفعيل خدمة الـ GPS في الهاتف وإعطاء الإذن للمتصفح!"
+              : "⚠️ Impossibile salvare senza autorizzare la posizione GPS attiva sul dispositivo!"
+          );
+          return;
+        }
+      } else {
+        alert("Geolocalizzazione GPS non supportata da questo dispositivo.");
         return;
       }
+    }
+
+    const check = verifyWorkerGeofence(currentLat, currentLng, workplaceZone);
+    if (!check.allowed) {
+      alert(
+        lang === "ar"
+          ? `❌ تم رفض تسجيل الساعات! أنت متواجد خارج موقع العمل (${check.distanceKm} كم من ${workplaceZone.name}). الحد الأقصى المسموح به هو ${workplaceZone.radiusKm} كم.`
+          : `❌ Registrazione Rifiutata: Sei fuori dalla zona di lavoro autorizzata (Distanza: ${check.distanceKm} km > ${workplaceZone.radiusKm} km dal cantiere).`
+      );
+      return;
     }
 
     setLoading(true);
@@ -190,6 +209,9 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
     const payload = {
       ...formData,
       workerName: formData.workerName || selectedWorker?.name || "Mario Rossi",
+      latitude: currentLat,
+      longitude: currentLng,
+      address: currentAddr || formData.address,
       totalHours: netHours,
       hourlyRate: rateToUse,
       totalPay: totalPay,

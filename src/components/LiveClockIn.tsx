@@ -99,7 +99,10 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
 
   // Real-time Geofence watcher when clocked-in
   useEffect(() => {
-    if (!currentActiveLog || typeof navigator === "undefined" || !navigator.geolocation) return;
+    if (!currentActiveLog || typeof navigator === "undefined" || !navigator.geolocation) {
+      setIsOutOfGeofence(false);
+      return;
+    }
 
     const checkPosition = (pos: GeolocationPosition) => {
       const { latitude, longitude } = pos.coords;
@@ -116,16 +119,26 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
       }
     };
 
+    // Immediate check on mount/update
+    navigator.geolocation.getCurrentPosition(checkPosition, () => {}, { enableHighAccuracy: true, timeout: 8000 });
+
     const watchId = navigator.geolocation.watchPosition(
       checkPosition,
       (err) => console.warn("Watch position error", err),
-      { enableHighAccuracy: true, maximumAge: 30000, timeout: 27000 }
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
     );
 
-    return () => navigator.geolocation.clearWatch(watchId);
+    const intervalId = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(checkPosition, () => {}, { enableHighAccuracy: true, timeout: 8000 });
+    }, 15000);
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      clearInterval(intervalId);
+    };
   }, [currentActiveLog, workplaceZone]);
 
-  // Request browser geolocation
+  // Request browser geolocation manually
   const handleDetectLocation = () => {
     if (!navigator.geolocation) {
       setStatusMessage({ type: "error", text: "Geolocalizzazione non supportata dal tuo browser." });
@@ -155,9 +168,10 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
             text: `✅ Posizione GPS Verificata: ${addr} (Distanza dal cantiere: ${geoCheck.distanceKm} km)`,
           });
         } else {
+          playGeofenceAlarmSound();
           setStatusMessage({
             type: "error",
-            text: `⚠️ Attenzione: Sei a ${geoCheck.distanceKm} km dal cantiere (Limite: ${workplaceZone.radiusKm} km). La timbratura è consentita solo entro 3 km.`,
+            text: `⚠️ Attenzione: Sei a ${geoCheck.distanceKm} km dal cantiere (Limite: ${workplaceZone.radiusKm} km). Timbratura bloccata.`,
           });
         }
       },
@@ -173,34 +187,72 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
     );
   };
 
-  // Clock In Action
+  // Clock In Action with AUTOMATIC LIVE GPS ACQUISITION & GEOFENCE ENFORCEMENT
   const handleClockIn = async () => {
-    // Geofencing verification for worker
-    if (userRole === "worker") {
-      if (!coords) {
-        setStatusMessage({
-          type: "error",
-          text: lang === "ar"
-            ? "⚠️ يجب الضغط على زر (Rileva Posizione GPS) أولاً للتحقق من وجودك داخل نطاق الـ 3 كم من موقع العمل!"
-            : "⚠️ Devi prima rilevare la posizione GPS per verificare la presenza entro il raggio di 3 km dal cantiere!",
-        });
-        return;
-      }
-
-      const check = verifyWorkerGeofence(coords.lat, coords.lng, workplaceZone);
-      if (!check.allowed) {
-        setStatusMessage({
-          type: "error",
-          text: lang === "ar"
-            ? `⚠️ تم رفض تسجيل الدخول: أنت خارج نطاق العمل المسموح! المسافة الحالية (${check.distanceKm} كم) أكبر من الحد المسموح (${workplaceZone.radiusKm} كم).`
-            : `⚠️ Timbratura Rifiutata: Sei fuori dalla zona di lavoro autorizzata (Distanza: ${check.distanceKm} km > ${workplaceZone.radiusKm} km dal cantiere).`,
-        });
-        return;
-      }
-    }
-
     setLoading(true);
     setStatusMessage(null);
+
+    let activeCoords = coords;
+    let activeAddress = customAddress;
+
+    // 1. AUTOMATIC REAL-TIME GPS ACQUISITION
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+          });
+        });
+
+        const { latitude, longitude } = position.coords;
+        activeCoords = { lat: latitude, lng: longitude };
+        setCoords(activeCoords);
+
+        const addr = await reverseGeocode(latitude, longitude);
+        activeAddress = addr;
+        setCustomAddress(addr);
+
+        // 2. STRICT 3KM GEOFENCE VERIFICATION
+        const geoCheck = verifyWorkerGeofence(latitude, longitude, workplaceZone);
+        setCurrentDistance(geoCheck.distanceKm);
+
+        if (!geoCheck.allowed) {
+          playGeofenceAlarmSound();
+          if (navigator.vibrate) {
+            navigator.vibrate([400, 200, 400, 200, 800]);
+          }
+
+          setStatusMessage({
+            type: "error",
+            text: lang === "ar"
+              ? `❌ تم رفض تسجيل الحضور! أنت تبعد مسافة (${geoCheck.distanceKm} كم) عن موقع العمل المحدد (${workplaceZone.name}). لا يمكن تسجيل الحضور من المنزل أو من خارج محيط الـ ${workplaceZone.radiusKm} كم!`
+              : `❌ Timbratura Rifiutata! Sei a ${geoCheck.distanceKm} km dal cantiere (${workplaceZone.name}). Limite massimo: ${workplaceZone.radiusKm} km.`,
+          });
+          setLoading(false);
+          return;
+        }
+      } catch (geoErr: any) {
+        console.warn("Geolocation error during clock in:", geoErr);
+        setStatusMessage({
+          type: "error",
+          text: lang === "ar"
+            ? "⚠️ تنبيه أمني: لا يمكن تسجيل الحضور بدون تفعيل خدمة الـ GPS في هاتفك وإعطاء الإذن للمتصفح!"
+            : "⚠️ Impossibile timbrare senza autorizzare la posizione GPS attiva sul dispositivo!",
+        });
+        setLoading(false);
+        return;
+      }
+    } else {
+      setStatusMessage({
+        type: "error",
+        text: "Geolocalizzazione GPS non supportata da questo dispositivo.",
+      });
+      setLoading(false);
+      return;
+    }
+
+    // 3. PROCEED TO CREATE WORK LOG
     try {
       const dateISO = getCurrentDateISO();
       const timeHHMM = getCurrentTimeHHMM();
@@ -216,10 +268,10 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
         hourlyRate: activeWorkerRate,
         totalPay: "0.00",
         workType: selectedWorkType,
-        locationName: selectedLocation,
-        address: customAddress || null,
-        latitude: coords ? String(coords.lat) : null,
-        longitude: coords ? String(coords.lng) : null,
+        locationName: selectedLocation || workplaceZone.name,
+        address: activeAddress || null,
+        latitude: activeCoords ? String(activeCoords.lat) : null,
+        longitude: activeCoords ? String(activeCoords.lng) : null,
         notes: notes || null,
         isClockedIn: 1,
       });
@@ -230,7 +282,9 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
 
       setStatusMessage({
         type: "success",
-        text: `Timbratura di Entrata registrata per ${activeWorkerName} alle ore ${timeHHMM}`,
+        text: lang === "ar"
+          ? `✅ تم تسجيل الحضور بنجاح لـ ${activeWorkerName} الساعة ${timeHHMM}`
+          : `Timbratura di Entrata registrata per ${activeWorkerName} alle ore ${timeHHMM}`,
       });
       onRefresh();
     } catch (e: any) {
