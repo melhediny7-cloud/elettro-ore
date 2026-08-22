@@ -293,17 +293,20 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
       const dateStr = now.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
       const locationStr = activeAddress || selectedLocation || workplaceZone.name;
       const gpsCoords = activeCoords ? `${activeCoords.lat},${activeCoords.lng}` : `${workplaceZone.lat},${workplaceZone.lng}`;
-      const msg = `📌 *NOTIFICA ELETTRO-ORE*
-🟢 TIMBRATURA ENTRATA (Inizio Turno)
-
-👷 *Lavoratore:* ${activeWorkerName}
-⏰ *Orario:* ${timeHHMM}
-📅 *Data:* ${dateStr}
-📍 *Cantiere:* ${workplaceZone.name}
-🗺️ *Indirizzo GPS:* ${locationStr}
-🌐 *Mappa Google:* https://www.google.com/maps?q=${gpsCoords}
-
-_Inviato da ElettroOre Italia_`;
+      const msg = `🚨 *NOTIFICA ELETTRO-ORE / إشعار حضور*
+━━━━━━━━━━━━━━━━━━━━━
+👤 *اسم العامل / LAVORATORE:*
+👉 *${activeWorkerName}* 👈
+━━━━━━━━━━━━━━━━━━━━━
+🟢 *العملية / STATO:* تسجيل دخول (TIMBRATURA ENTRATA)
+⏰ *الساعة / ORARIO:* ${timeHHMM}
+📅 *التاريخ / DATA:* ${dateStr}
+📍 *موقع العمل / CANTIERE:* ${workplaceZone.name}
+🗺️ *العنوان الدقيق / INDIRIZZO:* ${locationStr}
+🌐 *رابط الموقع الجغرافي (GPS MAP):*
+https://www.google.com/maps?q=${gpsCoords}
+━━━━━━━━━━━━━━━━━━━━━
+_تم الإرسال تلقائياً من تطبيق ElettroOre Italia_`;
       const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
       setWhatsAppPromptData({
         title: "🟢 تسجيل الدخول (TIMBRATURA ENTRATA)",
@@ -360,17 +363,20 @@ _Inviato da ElettroOre Italia_`;
       const dateStr = now.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
       const locationStr = currentActiveLog.address || currentActiveLog.locationName || workplaceZone.name;
       const gpsCoords = currentActiveLog.latitude && currentActiveLog.longitude ? `${currentActiveLog.latitude},${currentActiveLog.longitude}` : `${workplaceZone.lat},${workplaceZone.lng}`;
-      const msg = `📌 *NOTIFICA ELETTRO-ORE*
-🔴 TIMBRATURA USCITA (Fine Turno)
-
-👷 *Lavoratore:* ${activeWorkerName}
-⏰ *Orario:* ${timeHHMM} (Totale: ${netHours} ore)
-📅 *Data:* ${dateStr}
-📍 *Cantiere:* ${workplaceZone.name}
-🗺️ *Indirizzo GPS:* ${locationStr}
-🌐 *Mappa Google:* https://www.google.com/maps?q=${gpsCoords}
-
-_Inviato da ElettroOre Italia_`;
+      const msg = `🚨 *NOTIFICA ELETTRO-ORE / إشعار انصراف*
+━━━━━━━━━━━━━━━━━━━━━
+👤 *اسم العامل / LAVORATORE:*
+👉 *${activeWorkerName}* 👈
+━━━━━━━━━━━━━━━━━━━━━
+🔴 *العملية / STATO:* تسجيل خروج (TIMBRATURA USCITA)
+⏰ *الساعة / ORARIO:* ${timeHHMM} (إجمالي الساعات: ${netHours} ore)
+📅 *التاريخ / DATA:* ${dateStr}
+📍 *موقع العمل / CANTIERE:* ${workplaceZone.name}
+🗺️ *العنوان الدقيق / INDIRIZZO:* ${locationStr}
+🌐 *رابط الموقع الجغرافي (GPS MAP):*
+https://www.google.com/maps?q=${gpsCoords}
+━━━━━━━━━━━━━━━━━━━━━
+_تم الإرسال تلقائياً من تطبيق ElettroOre Italia_`;
       const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
       setWhatsAppPromptData({
         title: "🔴 تسجيل الخروج (TIMBRATURA USCITA)",
@@ -397,7 +403,7 @@ _Inviato da ElettroOre Italia_`;
   const sendWhatsAppReport = (type: "entrata" | "uscita" | "allarme") => {
     const managerPhone = typeof window !== "undefined" ? localStorage.getItem("oralavoro_managerPhone") || "" : "";
     const cleanPhone = managerPhone.replace(/[^0-9]/g, "");
-    const workerName = selectedWorker ? selectedWorker.name : "Lavoratore";
+    const workerName = selectedWorker ? selectedWorker.name : activeWorkerName;
     const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
     const dateStr = now.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
     const locationStr = currentActiveLog?.address || currentActiveLog?.locationName || workplaceZone.name || "Cantiere";
@@ -405,20 +411,22 @@ _Inviato da ElettroOre Italia_`;
       ? `${currentActiveLog.latitude},${currentActiveLog.longitude}` 
       : `${workplaceZone.lat},${workplaceZone.lng}`;
     
-    let title = "📌 *NOTIFICA ELETTRO-ORE*";
-    let statusText = type === "entrata" ? "🟢 TIMBRATURA ENTRATA (Inizio Turno)" : (type === "uscita" ? "🔴 TIMBRATURA USCITA (Fine Turno)" : "🚨 ALLARME FUORI CANTIERE");
+    let statusTitle = type === "entrata" ? "🟢 تسجيل دخول (TIMBRATURA ENTRATA)" : (type === "uscita" ? "🔴 تسجيل خروج (TIMBRATURA USCITA)" : "🚨 إنذار خروج عن الورشة (ALLARME FUORI CANTIERE)");
     
-    const msg = `${title}
-${statusText}
-
-👷 *Lavoratore:* ${workerName}
-⏰ *Orario:* ${timeStr}
-📅 *Data:* ${dateStr}
-📍 *Cantiere:* ${workplaceZone.name}
-🗺️ *Indirizzo GPS:* ${locationStr}
-🌐 *Mappa Google:* https://www.google.com/maps?q=${gpsCoords}
-
-_Inviato da ElettroOre Italia_`;
+    const msg = `🚨 *NOTIFICA ELETTRO-ORE / إشعار حضور وانصراف*
+━━━━━━━━━━━━━━━━━━━━━
+👤 *اسم العامل / LAVORATORE:*
+👉 *${workerName}* 👈
+━━━━━━━━━━━━━━━━━━━━━
+📝 *العملية / STATO:* ${statusTitle}
+⏰ *الساعة / ORARIO:* ${timeStr}
+📅 *التاريخ / DATA:* ${dateStr}
+📍 *موقع العمل / CANTIERE:* ${workplaceZone.name}
+🗺️ *العنوان الدقيق / INDIRIZZO:* ${locationStr}
+🌐 *رابط الموقع الجغرافي (GPS MAP):*
+https://www.google.com/maps?q=${gpsCoords}
+━━━━━━━━━━━━━━━━━━━━━
+_تم الإرسال تلقائياً من تطبيق ElettroOre Italia_`;
 
     const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
     window.open(url, "_blank");
@@ -560,7 +568,12 @@ _Inviato da ElettroOre Italia_`;
               value={selectedWorker?.id || workers[0]?.id}
               onChange={(e) => {
                 const found = workers.find((w) => w.id === Number(e.target.value));
-                if (found) onSelectWorker(found);
+                if (found) {
+                  onSelectWorker(found);
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem("oralavoro_selected_worker_id", String(found.id));
+                  }
+                }
               }}
               className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
