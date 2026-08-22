@@ -527,6 +527,18 @@ export async function fetchAppSettings(): Promise<AppSettings> {
           defaultLocation: data[0].default_location || "Ufficio Sede - Milano",
           adminPin: data[0].admin_pin || "1234",
         };
+      } else if (Array.isArray(data) && data.length === 0) {
+        // Auto-create general row
+        await fetch(`${SUPABASE_URL}/app_settings`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            id: "general",
+            company_name: "Azienda s.r.l.",
+            default_location: "Ufficio Sede - Milano",
+            admin_pin: "1234",
+          }),
+        });
       }
     }
   } catch (e) {
@@ -543,14 +555,17 @@ export async function fetchAppSettings(): Promise<AppSettings> {
 
 export async function updateAppSettings(settings: Partial<AppSettings>): Promise<boolean> {
   try {
-    const payload: any = {};
+    const payload: any = { id: "general" };
     if (settings.companyName !== undefined) payload.company_name = settings.companyName;
     if (settings.defaultLocation !== undefined) payload.default_location = settings.defaultLocation;
     if (settings.adminPin !== undefined) payload.admin_pin = settings.adminPin;
 
-    const res = await fetch(`${SUPABASE_URL}/app_settings?id=eq.general`, {
-      method: "PATCH",
-      headers,
+    const res = await fetch(`${SUPABASE_URL}/app_settings`, {
+      method: "POST",
+      headers: {
+        ...headers,
+        Prefer: "resolution=merge-duplicates",
+      },
       body: JSON.stringify(payload),
     });
     if (res.ok) return true;
