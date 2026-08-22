@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useCallback } from "react";
+import { User, Lock, Check } from "lucide-react";
 import { Header } from "../components/Header";
 import { PWAInstallBanner } from "../components/PWAInstallBanner";
 import { LiveClockIn } from "../components/LiveClockIn";
@@ -20,6 +21,7 @@ function AppHome() {
   const [logs, setLogs] = useState<WorkLogEntry[]>([]);
   const [workers, setWorkers] = useState<WorkerProfile[]>([]);
   const [selectedWorker, setSelectedWorker] = useState<WorkerProfile | null>(null);
+  const [showFirstTimeWorkerPicker, setShowFirstTimeWorkerPicker] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lang, setLangState] = useState<Language>("it");
 
@@ -85,8 +87,18 @@ function AppHome() {
       // Auto select first worker or retrieve stored worker ID
       if (data && data.length > 0) {
         const storedWorkerId = typeof window !== "undefined" ? localStorage.getItem("oralavoro_selected_worker_id") : null;
-        const matched = data.find((w) => String(w.id) === storedWorkerId);
-        setSelectedWorker(matched || data[0]);
+        if (storedWorkerId) {
+          const matched = data.find((w) => String(w.id) === storedWorkerId);
+          if (matched) {
+            setSelectedWorker(matched);
+            return;
+          }
+        }
+        // If not stored and there are multiple workers, prompt worker to bind this device
+        if (data.length > 1) {
+          setShowFirstTimeWorkerPicker(true);
+        }
+        setSelectedWorker(data[0]);
       }
     } catch (err) {
       console.error("Error refreshing workers:", err);
@@ -240,6 +252,52 @@ function AppHome() {
           </div>
         </div>
       </footer>
+
+      {/* ONE-TIME WORKER DEVICE BINDING MODAL */}
+      {showFirstTimeWorkerPicker && workers.length > 1 && (
+        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 print:hidden animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 text-center border border-slate-100">
+            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+              <User className="w-8 h-8" />
+            </div>
+
+            <div>
+              <h3 className="text-xl font-black text-slate-900">
+                {lang === "ar" ? "اختر اسمك لتسجيل الدخول 📲" : "Identificati per iniziare 📲"}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1.5 leading-relaxed font-medium">
+                {lang === "ar"
+                  ? "يرجى تحديد حسابك الشخصي لربط هذا الهاتف بك. بعد التحديد ستتمكن فقط من إدارة وتسجيل ساعاتك الشخصية ولن يظهر لك ساعات العمال الآخرين."
+                  : "Seleziona il tuo profilo per associare questo telefono. Potrai visualizzare e timbrare esclusivamente le tue ore personali."}
+              </p>
+            </div>
+
+            <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+              {workers.map((w) => (
+                <button
+                  key={w.id}
+                  type="button"
+                  onClick={() => {
+                    handleSelectWorker(w);
+                    setShowFirstTimeWorkerPicker(false);
+                  }}
+                  className="w-full p-3.5 rounded-2xl border-2 border-slate-200 hover:border-blue-500 bg-slate-50 hover:bg-blue-50/50 font-bold text-sm flex items-center justify-between transition-all cursor-pointer group text-slate-800"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-blue-600 group-hover:bg-blue-700 text-white font-black flex items-center justify-center text-xs shadow-sm">
+                      {w.name[0]}
+                    </div>
+                    <span className="text-sm">{w.name}</span>
+                  </div>
+                  <span className="text-xs text-blue-600 group-hover:text-blue-700 font-bold bg-blue-100/70 px-2.5 py-1 rounded-lg">
+                    {lang === "ar" ? "تأكيد الدخول 👈" : "Accedi 👈"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

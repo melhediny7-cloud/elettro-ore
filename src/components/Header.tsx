@@ -151,25 +151,38 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </div>
 
-            {/* Worker Selector Dropdown (Always visible for easy worker identity) */}
+            {/* Worker Selector: Admin can switch worker, Worker has locked identity badge */}
             {workers.length > 0 && (
-              <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-xs">
-                <User className="w-3.5 h-3.5 text-blue-400 mr-1.5" />
-                <select
-                  value={selectedWorker?.id || workers[0]?.id}
-                  onChange={(e) => {
-                    const found = workers.find((w) => w.id === Number(e.target.value));
-                    if (found) onSelectWorker(found);
-                  }}
-                  className="bg-transparent text-slate-200 font-bold focus:outline-none cursor-pointer pr-1"
-                >
-                  {workers.map((w) => (
-                    <option key={w.id} value={w.id} className="bg-slate-900 text-white">
-                      {w.name} {userRole === "admin" ? `(${w.hourlyRate}€/h)` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              userRole === "admin" ? (
+                <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-xs">
+                  <User className="w-3.5 h-3.5 text-amber-400 mr-1.5" />
+                  <select
+                    value={selectedWorker?.id || workers[0]?.id}
+                    onChange={(e) => {
+                      const found = workers.find((w) => w.id === Number(e.target.value));
+                      if (found) {
+                        onSelectWorker(found);
+                        if (typeof window !== "undefined") {
+                          localStorage.setItem("oralavoro_selected_worker_id", String(found.id));
+                        }
+                      }
+                    }}
+                    className="bg-transparent text-slate-200 font-bold focus:outline-none cursor-pointer pr-1"
+                  >
+                    {workers.map((w) => (
+                      <option key={w.id} value={w.id} className="bg-slate-900 text-white">
+                        {w.name} ({w.hourlyRate}€/h)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="flex items-center bg-slate-800/90 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-200 font-bold gap-1.5 shadow-inner">
+                  <User className="w-3.5 h-3.5 text-blue-400" />
+                  <span>{selectedWorker?.name || workers[0]?.name}</span>
+                  <Lock className="w-3 h-3 text-slate-400" />
+                </div>
+              )
             )}
 
             {/* Mode / Role Toggle Button */}

@@ -547,7 +547,7 @@ _تم الإرسال تلقائياً من تطبيق ElettroOre Italia_`;
           </div>
         </div>
 
-        {workers.length > 1 && (
+        {workers.length > 1 && userRole === "admin" ? (
           <div className="flex items-center gap-2">
             <label className="text-xs text-slate-500 font-medium hidden sm:block">Cambia:</label>
             <select
@@ -565,10 +565,14 @@ _تم الإرسال تلقائياً من تطبيق ElettroOre Italia_`;
             >
               {workers.map((w) => (
                 <option key={w.id} value={w.id}>
-                  {w.name} {userRole === "admin" ? `(${w.hourlyRate} €/h)` : ""}
+                  {w.name} ({w.hourlyRate} €/h)
                 </option>
               ))}
             </select>
+          </div>
+        ) : (
+          <div className="text-xs text-slate-400 font-medium flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+            <span>🔒 {lang === "ar" ? "حسابك الشخصي مثبت على هذا الهاتف" : "Profilo personale bloccato su questo telefono"}</span>
           </div>
         )}
       </div>

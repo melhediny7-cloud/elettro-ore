@@ -258,9 +258,12 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
 
   // Filtering
   const filteredLogs = logs.filter((log) => {
-    // If worker mode, strictly only show this worker's logs
-    if (userRole === "worker" && selectedWorker) {
-      const isMyLog = log.workerId === selectedWorker.id || log.workerName?.trim().toLowerCase() === selectedWorker.name?.trim().toLowerCase();
+    // If worker mode, strictly only show THIS specific worker's logs
+    if (userRole === "worker") {
+      if (!selectedWorker) return false;
+      const isMyLog = 
+        (log.workerId && log.workerId === selectedWorker.id) || 
+        (log.workerName && log.workerName.trim().toLowerCase() === selectedWorker.name.trim().toLowerCase());
       if (!isMyLog) return false;
     }
 
@@ -295,7 +298,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-          {logs.length > 0 && (
+          {logs.length > 0 && userRole === "admin" && (
             <button
               onClick={handleClearAll}
               className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-sm font-semibold rounded-xl transition-all"
