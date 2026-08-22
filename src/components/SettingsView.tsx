@@ -47,6 +47,75 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setZoneRadius(String(z.radiusKm || 3.0));
   }, [defaultLocation]);
 
+  // Presets of famous Italian cantieri / work places
+  const WORKPLACE_PRESETS = [
+    { name: "Ospedale Luigi Sacco - Milano", lat: "45.5204", lng: "9.1303", icon: "🏥" },
+    { name: "Ufficio Sede Centrale - Milano (Via Dante)", lat: "45.4642", lng: "9.1900", icon: "🏢" },
+    { name: "Cantiere Baranzate (Via Gradisca)", lat: "45.5278", lng: "9.1172", icon: "🏗️" },
+    { name: "Cantiere Milano Certosa (Raccordo A8)", lat: "45.5020", lng: "9.1450", icon: "🛣️" },
+    { name: "Impianto Industriale - Monza", lat: "45.5845", lng: "9.2744", icon: "🏭" },
+  ];
+
+  // Address search state
+  const [addressSearchQuery, setAddressSearchQuery] = useState("");
+  const [addressSearchResults, setAddressSearchResults] = useState<any[]>([]);
+  const [addressSearching, setAddressSearching] = useState(false);
+  const [showCoordsDetails, setShowCoordsDetails] = useState(false);
+
+  // Instant Address Search
+  const handleSearchAddress = async (query: string) => {
+    setAddressSearchQuery(query);
+    if (!query || query.trim().length < 3) {
+      setAddressSearchResults([]);
+      return;
+    }
+
+    // Check if query is Google Maps URL or raw coordinates
+    const gmapsCoords = query.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || query.match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/) || query.match(/(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)/);
+    if (gmapsCoords) {
+      const lat = parseFloat(gmapsCoords[1]);
+      const lng = parseFloat(gmapsCoords[2]);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        setZoneLat(String(lat.toFixed(5)));
+        setZoneLng(String(lng.toFixed(5)));
+        setZoneName(`Posizione GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+        setAddressSearchResults([]);
+        return;
+      }
+    }
+
+    setAddressSearching(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=it,eg,fr,de,ch&limit=5`, {
+        headers: { "User-Agent": "OraLavoroApp/1.0" },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAddressSearchResults(data || []);
+      }
+    } catch (e) {
+      console.warn("Search error", e);
+    } finally {
+      setAddressSearching(false);
+    }
+  };
+
+  const handleSelectSearchResult = (result: any) => {
+    const lat = parseFloat(result.lat);
+    const lng = parseFloat(result.lon);
+    setZoneLat(String(lat.toFixed(5)));
+    setZoneLng(String(lng.toFixed(5)));
+    setZoneName(result.display_name.split(",").slice(0, 3).join(","));
+    setAddressSearchQuery("");
+    setAddressSearchResults([]);
+  };
+
+  const handleSelectPreset = (preset: typeof WORKPLACE_PRESETS[0]) => {
+    setZoneName(preset.name);
+    setZoneLat(preset.lat);
+    setZoneLng(preset.lng);
+  };
+
   const handleDetectAdminGPS = () => {
     if (!navigator.geolocation) {
       alert(lang === "ar" ? "المتصفح لا يدعم تحديد الموقع" : "Geolocalizzazione non supportata");
@@ -287,26 +356,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </form>
       </div>
 
-      {/* 2. COMPANY METADATA & GEOFENCING SETTINGS */}
+      {/* 2. COMPANY METADATA & SUPER EASY GEOFENCING SETTINGS */}
       <div className="bg-white p-6 rounded-2xl border border-blue-200 shadow-sm space-y-6">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Compass className="w-5 h-5 text-blue-600" />
-              <span>{lang === "ar" ? "إعدادات الشركة وتحديد نطاق موقع العمل (Geofencing GPS)" : "Azienda e Zona Geofencing Cantiere (GPS 3 km)"}</span>
+              <span>{lang === "ar" ? "تحديد موقع العمل ونطاق الـ 3 كم (Geofencing GPS)" : "Zona Geofencing Cantiere (GPS 3 km)"}</span>
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               {lang === "ar"
-                ? "حدد موقع العمل الفعلي ومحيط الـ GPS (مثلاً 3 كم) لمنع العمال من تسجيل الحضور من خارج الورشة."
-                : "Imposta le coordinate del cantiere e il raggio di tolleranza (es: 3 km) per bloccare le timbrature fuori sede."}
+                ? "ابحث باسم الشارع أو المستشفى أو اختر من المواقع السريعة الجاهزة بنقرة واحدة."
+                : "Cerca per indirizzo, scegli tra i luoghi rapidi o rileva la tua posizione attuale."}
             </p>
           </div>
-          <span className="px-2.5 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded-lg border border-blue-200">
-            GPS 3 KM
+          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg border border-emerald-200 flex items-center gap-1">
+            <Check className="w-3.5 h-3.5" /> GPS 3 KM
           </span>
         </div>
 
-        <form onSubmit={handleSaveCompanySettings} className="space-y-4">
+        <form onSubmit={handleSaveCompanySettings} className="space-y-5">
           
           {/* Company Name */}
           <div>
@@ -320,91 +389,148 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
               placeholder="es: Power / Edilizia s.r.l."
-              className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
-          {/* Cantiere / Workplace Name */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1 flex items-center gap-1.5">
-              <MapPin className="w-4 h-4 text-rose-600" />
-              <span>{lang === "ar" ? "اسم موقع العمل / الورشة (Cantiere / Sede)" : "Nome Cantiere / Luogo Principale"}</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={zoneName}
-              onChange={(e) => setZoneName(e.target.value)}
-              placeholder="es: Cantiere Milano / Ospedale Sacco"
-              className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          {/* Workplace GPS Coordinates & Detect Button */}
-          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-700 uppercase">
-                {lang === "ar" ? "📍 إحداثيات موقع العمل الجغرافية (GPS)" : "📍 Coordinate Centro Cantiere"}
+          {/* 🌟 1. SMART ADDRESS SEARCH BOX */}
+          <div className="space-y-2 relative">
+            <label className="block text-xs font-bold text-slate-700 uppercase flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-rose-600" />
+                <span>{lang === "ar" ? "🔍 ابحث عن عنوان الورشة أو المستشفى / الصق رابط خرائط جوجل:" : "🔍 Cerca Indirizzo o Incolla Link Google Maps:"}</span>
               </span>
+              {addressSearching && <span className="text-[11px] text-blue-600 font-bold flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin" /> جاري البحث...</span>}
+            </label>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={addressSearchQuery}
+                onChange={(e) => handleSearchAddress(e.target.value)}
+                placeholder={lang === "ar" ? "مثال: Ospedale Sacco Milano أو Via Felice Orsini أو Via Dante..." : "es: Ospedale Sacco Milano, Via Felice Orsini, Via Dante..."}
+                className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
               <button
                 type="button"
                 onClick={handleDetectAdminGPS}
                 disabled={geoLocLoading}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition-all disabled:opacity-50"
+                className="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow transition-all flex-shrink-0"
               >
                 {geoLocLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Navigation className="w-3.5 h-3.5" />}
-                <span>{lang === "ar" ? "تحديد موقعي الحالي كمركز العمل 📍" : "Rileva Mia Posizione 📍"}</span>
+                <span>{lang === "ar" ? "موقعي الحالي 📍" : "Mia Posizione 📍"}</span>
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Latitude (خط العرض)</label>
-                <input
-                  type="text"
-                  required
-                  value={zoneLat}
-                  onChange={(e) => setZoneLat(e.target.value)}
-                  placeholder="45.4642"
-                  className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+            {/* Search Results Dropdown */}
+            {addressSearchResults.length > 0 && (
+              <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-30 divide-y max-h-48 overflow-y-auto">
+                {addressSearchResults.map((r, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => handleSelectSearchResult(r)}
+                    className="w-full text-left p-3 hover:bg-blue-50 text-xs font-medium text-slate-800 flex items-start gap-2 transition-colors"
+                  >
+                    <MapPin className="w-4 h-4 text-rose-500 flex-shrink-0 mt-0.5" />
+                    <span>{r.display_name}</span>
+                  </button>
+                ))}
               </div>
+            )}
+          </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Longitude (خط الطول)</label>
-                <input
-                  type="text"
-                  required
-                  value={zoneLng}
-                  onChange={(e) => setZoneLng(e.target.value)}
-                  placeholder="9.1900"
-                  className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">
-                  {lang === "ar" ? "نطاق السماح (Radius)" : "Raggio Tolleranza (km)"}
-                </label>
-                <select
-                  value={zoneRadius}
-                  onChange={(e) => setZoneRadius(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          {/* 🌟 2. ONE-CLICK PRESET LOCATIONS */}
+          <div className="space-y-1.5">
+            <span className="text-[11px] font-bold text-slate-500 uppercase block">
+              {lang === "ar" ? "⚡ أو اختر موقعاً جاهزاً بنقرة واحدة:" : "⚡ Oppure seleziona un cantiere rapido:"}
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {WORKPLACE_PRESETS.map((p, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => handleSelectPreset(p)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
+                    zoneName.includes(p.name.split(" ")[0])
+                      ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                      : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
+                  }`}
                 >
-                  <option value="1.0">1.0 km (نطاق ضيق جداً)</option>
-                  <option value="2.0">2.0 km</option>
-                  <option value="3.0">3.0 km (الموصى به - محيط 3 كم)</option>
-                  <option value="5.0">5.0 km</option>
-                  <option value="10.0">10.0 km (نطاق مدينة كاملة)</option>
-                </select>
+                  <span>{p.icon}</span>
+                  <span>{p.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 🌟 3. ACTIVE SELECTED LOCATION CARD */}
+          <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white p-4 rounded-xl shadow border border-slate-700 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block flex items-center gap-1">
+                  <Check className="w-3.5 h-3.5" /> {lang === "ar" ? "موقع العمل المعتمد حالياً للعمال:" : "Cantiere Attivo Configurato:"}
+                </span>
+                <h4 className="text-base font-black text-white mt-0.5">
+                  {zoneName}
+                </h4>
               </div>
+              <span className="px-2.5 py-1 bg-amber-400 text-slate-900 font-extrabold text-xs rounded-lg shadow flex-shrink-0">
+                محيط {zoneRadius} كم
+              </span>
             </div>
 
-            <p className="text-[11px] text-slate-500 font-medium">
-              💡 {lang === "ar" 
-                ? `أي عامل يبعد أكثر من ${zoneRadius} كم عن هذه الإحداثيات سيتم حظره وتنبيهه بالعودة لموقع العمل.`
-                : `Qualsiasi lavoratore a più di ${zoneRadius} km da questo punto sarà bloccato e allertato.`}
-            </p>
+            {/* Radius Selector */}
+            <div className="pt-2 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <span className="text-slate-300 font-medium">
+                {lang === "ar" ? "نطاق السماح للـ GPS:" : "Raggio di tolleranza:"}
+              </span>
+              <select
+                value={zoneRadius}
+                onChange={(e) => setZoneRadius(e.target.value)}
+                className="px-3 py-1.5 bg-slate-800 border border-slate-600 rounded-lg text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              >
+                <option value="1.0">1.0 km (نطاق ضيق 1 كم)</option>
+                <option value="2.0">2.0 km (نطاق 2 كم)</option>
+                <option value="3.0">3.0 km (الموصى به - محيط 3 كم)</option>
+                <option value="5.0">5.0 km (نطاق واسع 5 كم)</option>
+                <option value="10.0">10.0 km (نطاق مدينة 10 كم)</option>
+              </select>
+            </div>
+
+            {/* Collapsible Manual Coordinates */}
+            <div className="pt-2 border-t border-slate-800/80">
+              <button
+                type="button"
+                onClick={() => setShowCoordsDetails(!showCoordsDetails)}
+                className="text-[11px] text-blue-300 hover:text-white underline font-semibold flex items-center gap-1"
+              >
+                <span>{showCoordsDetails ? "إخفاء التفاصيل الإحداثية" : "عرض الأرقام الإحداثية (Latitude / Longitude)"}</span>
+              </button>
+
+              {showCoordsDetails && (
+                <div className="grid grid-cols-2 gap-3 mt-2 pt-2 border-t border-slate-800">
+                  <div>
+                    <label className="block text-[10px] text-slate-400 font-mono mb-0.5">Latitude</label>
+                    <input
+                      type="text"
+                      value={zoneLat}
+                      onChange={(e) => setZoneLat(e.target.value)}
+                      className="w-full px-2.5 py-1 bg-slate-800 border border-slate-700 rounded text-xs font-mono text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 font-mono mb-0.5">Longitude</label>
+                    <input
+                      type="text"
+                      value={zoneLng}
+                      onChange={(e) => setZoneLng(e.target.value)}
+                      className="w-full px-2.5 py-1 bg-slate-800 border border-slate-700 rounded text-xs font-mono text-white"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
@@ -418,7 +544,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             <button
               type="submit"
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl shadow-md transition-all flex items-center gap-2"
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center gap-2"
             >
               <Check className="w-4 h-4" />
               <span>{t.btnSaveSettings}</span>
