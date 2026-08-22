@@ -4,6 +4,37 @@ import { WorkLogEntry, WorkerProfile, createWorkLog, updateWorkLog, calculateNet
 import { getCurrentDateISO, getCurrentTimeHHMM, PRESET_LOCATIONS_IT, WORK_TYPES_IT, reverseGeocode, parseWorkplaceZone, verifyWorkerGeofence } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
 
+// Web Audio API Alarm Sound Generator
+function playGeofenceAlarmSound() {
+  if (typeof window === "undefined") return;
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+
+    const playTone = (freq: number, start: number, dur: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+      gain.gain.setValueAtTime(0.4, ctx.currentTime + start);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + start + dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur);
+    };
+
+    // High-low-high-low urgent alarm beeps
+    playTone(950, 0, 0.22);
+    playTone(650, 0.25, 0.22);
+    playTone(950, 0.50, 0.22);
+    playTone(650, 0.75, 0.35);
+  } catch (e) {
+    console.warn("Audio alarm playback error", e);
+  }
+}
+
 interface LiveClockInProps {
   logs: WorkLogEntry[];
   selectedWorker: WorkerProfile | null;
@@ -76,6 +107,7 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
       setCurrentDistance(res.distanceKm);
       if (!res.allowed) {
         setIsOutOfGeofence(true);
+        playGeofenceAlarmSound();
         if (navigator.vibrate) {
           navigator.vibrate([400, 200, 400, 200, 800]);
         }
@@ -273,14 +305,21 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
           <ShieldAlert className="w-8 h-8 flex-shrink-0 text-amber-300 animate-bounce" />
           <div className="flex-1">
             <h3 className="font-black text-lg text-amber-200 uppercase tracking-wide">
-              {lang === "ar" ? "🚨 تحذير هام: لقد خرجت عن نطاق موقع العمل المسموح!" : "🚨 ALLARME GEOFENCING: SEI USCITO DAL CANTIERE!"}
+              {lang === "ar" ? "🚨 تحذير: لقد خرجت عن موقع العمل!" : "🚨 ALLARME: SEI FUORI DAL POSTO DI LAVORO!"}
             </h3>
-            <p className="text-sm font-semibold mt-1 text-white">
+            <p className="text-base font-bold mt-1 text-white">
               {lang === "ar"
-                ? `المسافة الحالية عن موقع العمل: ${currentDistance || "> 3"} كم (الحد المسموح به: ${workplaceZone.radiusKm} كم). يجب عليك العودة فوراً إلى محيط العمل وإلا سيتم احتساب انصراف مبكر.`
-                : `Attualmente ti trovi a ${currentDistance} km dal centro del cantiere (Limite: ${workplaceZone.radiusKm} km). Rientra immediatamente nell'area di lavoro autorizzata.`}
+                ? "يرجى العودة فوراً إلى موقع العمل."
+                : "Rientra immediatamente sul posto di lavoro."}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => playGeofenceAlarmSound()}
+            className="px-3 py-1.5 bg-amber-400 text-slate-900 font-extrabold text-xs rounded-xl shadow hover:bg-amber-300 transition-all flex items-center gap-1 self-center"
+          >
+            <span>🔊 {lang === "ar" ? "صوت الإنذار" : "Allarme"}</span>
+          </button>
         </div>
       )}
 
