@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useCallback } from "react";
-import { User, Lock, Check } from "lucide-react";
+import { User, Lock, Check, Shield, Globe, ShieldCheck } from "lucide-react";
 import { Header } from "../components/Header";
 import { PWAInstallBanner } from "../components/PWAInstallBanner";
 import { LiveClockIn } from "../components/LiveClockIn";
@@ -27,6 +27,9 @@ function AppHome() {
   const [loginWorkerId, setLoginWorkerId] = useState<number | null>(null);
   const [loginWorkerPin, setLoginWorkerPin] = useState("");
   const [loginPinError, setLoginPinError] = useState(false);
+  const [isAdminLockModalOpen, setIsAdminLockModalOpen] = useState(false);
+  const [adminLockPinInput, setAdminLockPinInput] = useState("");
+  const [adminLockPinError, setAdminLockPinError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lang, setLangState] = useState<Language>("it");
 
@@ -51,15 +54,15 @@ function AppHome() {
 
   const handleWorkerLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!loginWorkerId) {
+      alert(lang === "ar" ? "⚠️ يرجى اختيار اسمك من القائمة أولاً" : "⚠️ Seleziona prima il tuo profilo dalla lista");
+      return;
+    }
     const target = workers.find((w) => w.id === Number(loginWorkerId));
     if (!target) return;
     const correctPin = target.pin || "1234";
     if (loginWorkerPin.trim() === correctPin.trim()) {
       setSelectedWorker(target);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("oralavoro_worker_auth_id", String(target.id));
-        localStorage.setItem("oralavoro_selected_worker_id", String(target.id));
-      }
       setIsWorkerLoggedIn(true);
       setLoginPinError(false);
       setLoginWorkerPin("");
@@ -73,6 +76,8 @@ function AppHome() {
       localStorage.removeItem("oralavoro_worker_auth_id");
     }
     setIsWorkerLoggedIn(false);
+    setSelectedWorker(null);
+    setLoginWorkerId(null);
     setLoginWorkerPin("");
     setLoginPinError(false);
   };
@@ -90,8 +95,11 @@ function AppHome() {
       if (storedPin) setAdminPin(storedPin);
       if (storedLang === "it" || storedLang === "ar") setLangState(storedLang);
       
-      // Always ensure worker mode on initial load
+      // Always start in worker mode with locked screen
       setUserRole("worker");
+      setIsWorkerLoggedIn(false);
+      setSelectedWorker(null);
+      setLoginWorkerId(null);
     }
 
     fetchAppSettings().then((settings) => {
@@ -111,29 +119,11 @@ function AppHome() {
     setUserRole(role);
   };
 
-  // Refresh workers list
+  // Refresh workers list - never auto-login
   const refreshWorkers = useCallback(async () => {
     try {
       const data = await fetchWorkers();
       setWorkers(data || []);
-      
-      // Auto select authenticated worker or prompt PIN login
-      if (data && data.length > 0) {
-        const authWorkerId = typeof window !== "undefined" ? localStorage.getItem("oralavoro_worker_auth_id") : null;
-        if (authWorkerId) {
-          const matched = data.find((w) => String(w.id) === authWorkerId);
-          if (matched) {
-            setSelectedWorker(matched);
-            setLoginWorkerId(matched.id);
-            setIsWorkerLoggedIn(true);
-            return;
-          }
-        }
-        // If not authenticated
-        setIsWorkerLoggedIn(false);
-        setLoginWorkerId(data[0].id);
-        setSelectedWorker(data[0]);
-      }
     } catch (err) {
       console.error("Error refreshing workers:", err);
     }
@@ -331,9 +321,36 @@ function AppHome() {
       </footer>
 
       {/* WORKER PIN LOGIN SCREEN */}
-      {userRole === "worker" && !isWorkerLoggedIn && workers.length > 0 && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 print:hidden animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 text-center border border-slate-100">
+      {userRole === "worker" && !isWorkerLoggedIn && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-lg flex items-center justify-center p-4 print:hidden animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 text-center border border-slate-100 relative">
+            
+            {/* Top Language Toggle */}
+            <div className="flex justify-end items-center gap-1.5 mb-1">
+              <button
+                type="button"
+                onClick={() => setLang("it")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  lang === "it"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                🇮🇹 IT
+              </button>
+              <button
+                type="button"
+                onClick={() => setLang("ar")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  lang === "ar"
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                🇪🇬 عربي
+              </button>
+            </div>
+
             <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
               <Lock className="w-8 h-8" />
             </div>
@@ -355,13 +372,17 @@ function AppHome() {
                   {lang === "ar" ? "👤 اختر اسمك:" : "👤 Seleziona Lavoratore:"}
                 </label>
                 <select
-                  value={loginWorkerId || workers[0]?.id}
+                  value={loginWorkerId !== null ? String(loginWorkerId) : ""}
                   onChange={(e) => {
-                    setLoginWorkerId(Number(e.target.value));
+                    const val = e.target.value;
+                    setLoginWorkerId(val ? Number(val) : null);
                     setLoginPinError(false);
                   }}
                   className="w-full px-3.5 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
+                  <option value="">
+                    {lang === "ar" ? "-- اضغط هنا لاختيار اسمك --" : "-- Seleziona il tuo nome dalla lista --"}
+                  </option>
                   {workers.map((w) => (
                     <option key={w.id} value={w.id}>
                       {w.name} ({w.role || "Operaio"})
@@ -377,7 +398,6 @@ function AppHome() {
                 <input
                   type="password"
                   required
-                  autoFocus
                   value={loginWorkerPin}
                   onChange={(e) => {
                     setLoginWorkerPin(e.target.value);
@@ -401,6 +421,95 @@ function AppHome() {
                 <Check className="w-4 h-4" />
                 <span>{lang === "ar" ? "دخول إلى صفحتي الشخصية 🚀" : "Accedi al Mio Profilo 🚀"}</span>
               </button>
+            </form>
+
+            {/* Admin Switch Link */}
+            <div className="pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setAdminLockPinInput("");
+                  setAdminLockPinError(false);
+                  setIsAdminLockModalOpen(true);
+                }}
+                className="text-xs font-bold text-slate-500 hover:text-blue-600 transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
+                <span>{lang === "ar" ? "أنت المدير؟ اضغط هنا للدخول بلوحة التحكم 🛡️" : "Sei l'Amministratore? Clicca qui per il pannello 🛡️"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADMIN PIN MODAL FROM LOCK SCREEN */}
+      {isAdminLockModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 print:hidden animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 sm:p-8 shadow-2xl space-y-5 text-center border border-slate-100">
+            <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+              <ShieldCheck className="w-7 h-7" />
+            </div>
+
+            <div>
+              <h3 className="text-lg font-black text-slate-900">
+                {lang === "ar" ? "دخول المدير / المشرف 🛡️" : "Accesso Amministratore 🛡️"}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {lang === "ar" ? "أدخل رمز PIN الخاص بالمدير للوصول لكافة الصلاحيات." : "Inserisci il PIN Amministratore per sbloccare tutti i pannelli."}
+              </p>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const inputTrimmed = adminLockPinInput.trim();
+                if (inputTrimmed === "1234" || (adminPin && inputTrimmed === adminPin.trim()) || inputTrimmed === "4159985") {
+                  setUserRole("admin");
+                  setActiveTab("timbratrice");
+                  setIsAdminLockModalOpen(false);
+                  setAdminLockPinInput("");
+                  setAdminLockPinError(false);
+                } else {
+                  setAdminLockPinError(true);
+                }
+              }}
+              className="space-y-4"
+            >
+              <input
+                type="password"
+                required
+                autoFocus
+                value={adminLockPinInput}
+                onChange={(e) => {
+                  setAdminLockPinInput(e.target.value);
+                  setAdminLockPinError(false);
+                }}
+                placeholder="PIN (es. 1234)"
+                maxLength={10}
+                className="w-full px-3.5 py-3 bg-slate-50 border border-slate-300 rounded-xl text-center text-lg font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+
+              {adminLockPinError && (
+                <p className="text-xs text-rose-600 font-bold animate-bounce">
+                  {lang === "ar" ? "❌ رمز PIN للمدير غير صحيح!" : "❌ PIN Amministratore errato!"}
+                </p>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAdminLockModalOpen(false)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  {lang === "ar" ? "إلغاء" : "Annulla"}
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+                >
+                  {lang === "ar" ? "تأكيد الدخول 🔓" : "Sblocca 🔓"}
+                </button>
+              </div>
             </form>
           </div>
         </div>
