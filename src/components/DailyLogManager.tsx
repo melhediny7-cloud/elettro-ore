@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Edit2, MapPin, Search, Calendar, Clock, ExternalLink, Navigation, Check, X, RefreshCw, Coins, User, Users } from "lucide-react";
+import { Plus, Trash2, Edit2, MapPin, Search, Calendar, Clock, ExternalLink, Navigation, Check, X, RefreshCw, Coins, User, Users, Lock, ShieldCheck } from "lucide-react";
 import { WorkLogEntry, WorkerProfile, createWorkLog, updateWorkLog, deleteWorkLog, clearAllWorkLogs, calculateNetHours, calculateTotalPay } from "../utils/api";
 import { formatDateIT, getCurrentDateISO, PRESET_LOCATIONS_IT, WORK_TYPES_IT, reverseGeocode, parseWorkplaceZone, verifyWorkerGeofence } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
@@ -87,6 +87,10 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
   };
 
   const openEditModal = (log: WorkLogEntry) => {
+    if (userRole !== "admin") {
+      alert(lang === "ar" ? "⚠️ تعديل الساعات المسجلة متاح للمدير فقط." : "⚠️ Solo l'amministratore può modificare le registrazioni.");
+      return;
+    }
     setEditingLog(log);
     const matchingWorker = workers.find((w) => w.id === log.workerId || w.name === log.workerName);
     const rateToUse = log.hourlyRate ? String(log.hourlyRate) : matchingWorker?.hourlyRate || "15.00";
@@ -234,6 +238,10 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
   };
 
   const handleDelete = async (id: number) => {
+    if (userRole !== "admin") {
+      alert(lang === "ar" ? "⚠️ حذف الساعات المسجلة متاح للمدير فقط." : "⚠️ Solo l'amministratore può eliminare le registrazioni.");
+      return;
+    }
     if (confirm(t.confirmDelete)) {
       await deleteWorkLog(id);
       onRefresh();
@@ -241,6 +249,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
   };
 
   const handleClearAll = async () => {
+    if (userRole !== "admin") return;
     if (confirm(t.confirmClearAll)) {
       await clearAllWorkLogs();
       onRefresh();
@@ -481,21 +490,30 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
 
                       {/* Actions */}
                       <td className="px-4 py-4 whitespace-nowrap text-right space-x-1">
-                        <button
-                          onClick={() => openEditModal(log)}
-                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition-colors"
-                          title="Modifica"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        {log.id && (
-                          <button
-                            onClick={() => handleDelete(log.id!)}
-                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded-lg transition-colors"
-                            title="Elimina"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        {userRole === "admin" ? (
+                          <>
+                            <button
+                              onClick={() => openEditModal(log)}
+                              className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition-colors"
+                              title="Modifica"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            {log.id && (
+                              <button
+                                onClick={() => handleDelete(log.id!)}
+                                className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                title="Elimina"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            <Lock className="w-3 h-3 text-slate-400" />
+                            <span>{lang === "ar" ? "محمي ومسجل" : "Protetto"}</span>
+                          </span>
                         )}
                       </td>
                     </tr>
