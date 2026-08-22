@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Building2, Plus, Edit2, Trash2, MapPin, ExternalLink, Check, X, RefreshCw, Crosshair, ShieldCheck, Clock, Users, HardHat } from "lucide-react";
 import { WorkSite, WorkLogEntry, createWorkSite, updateWorkSite, deleteWorkSite } from "../utils/api";
 import { translations, Language } from "../utils/i18n";
-import { getAddressFromCoords } from "../utils/italian";
+import { reverseGeocode } from "../utils/italian";
 
 interface CantieriManagerViewProps {
   cantieri: WorkSite[];
@@ -83,7 +83,7 @@ export const CantieriManagerView: React.FC<CantieriManagerViewProps> = ({
         }));
 
         try {
-          const addr = await getAddressFromCoords(lat, lon);
+          const addr = await reverseGeocode(lat, lon);
           if (addr && !formData.address) {
             setFormData((prev) => ({ ...prev, address: addr }));
           }
