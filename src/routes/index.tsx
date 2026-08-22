@@ -59,10 +59,14 @@ function AppHome() {
     }
 
     fetchAppSettings().then((settings) => {
-      if (settings) {
+      if (settings && settings.defaultLocation) {
         setCompanyName(settings.companyName);
         setDefaultLocation(settings.defaultLocation);
         setAdminPin(settings.adminPin);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("oralavoro_defaultLocation", settings.defaultLocation);
+          localStorage.setItem("oralavoro_companyName", settings.companyName);
+        }
       }
     }).catch(console.error);
   }, []);
