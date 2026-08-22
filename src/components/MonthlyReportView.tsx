@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Printer, Download, Calendar, Clock, MapPin, Award, FileSpreadsheet, Building2, User, ChevronLeft, ChevronRight, Coins, Filter, Users, PenTool, Check, ShieldCheck, MessageSquare, Send } from "lucide-react";
+import { Printer, Download, Calendar, Clock, MapPin, Award, FileSpreadsheet, Building2, User, ChevronLeft, ChevronRight, Coins, Filter, Users, PenTool, Check, ShieldCheck, MessageSquare, Send, HardHat } from "lucide-react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -10,7 +10,7 @@ import {
   Legend,
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
-import { WorkLogEntry, WorkerProfile, calculateTotalPay } from "../utils/api";
+import { WorkLogEntry, WorkerProfile, WorkSite, calculateTotalPay } from "../utils/api";
 import { MONTHS_IT, WORK_TYPES_IT, formatDateIT, getDayNameIT } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
 import { SignaturePad } from "./SignaturePad";
@@ -20,13 +20,14 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 interface MonthlyReportViewProps {
   logs: WorkLogEntry[];
   workers: WorkerProfile[];
+  cantieri?: WorkSite[];
   companyName: string;
   lang: Language;
   userRole?: "worker" | "admin";
   selectedWorker?: WorkerProfile | null;
 }
 
-export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, workers, companyName, lang, userRole = "admin", selectedWorker }) => {
+export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, workers, cantieri = [], companyName, lang, userRole = "admin", selectedWorker }) => {
   const t = translations[lang];
   const currentDate = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
@@ -36,6 +37,7 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, work
   const [selectedWorkerFilter, setSelectedWorkerFilter] = useState<string>(
     userRole === "worker" && selectedWorker ? String(selectedWorker.id) : "ALL"
   );
+  const [selectedCantiereFilter, setSelectedCantiereFilter] = useState<string>("ALL");
   const [showSignatureDrawer, setShowSignatureDrawer] = useState(false);
 
   const [signatureWorker, setSignatureWorker] = useState<string | null>(null);
@@ -75,20 +77,28 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, work
     }
   };
 
-  // Filter logs for selected month AND selected worker
+  // Filter logs for selected month AND selected worker AND selected cantiere
   const monthlyLogs = useMemo(() => {
     return logs
       .filter((log) => {
         const matchesMonth = log.date && log.date.startsWith(monthYearKey);
         if (!matchesMonth) return false;
-        if (selectedWorkerFilter === "ALL") return true;
-        return (
-          String(log.workerId) === selectedWorkerFilter ||
-          log.workerName === selectedWorkerFilter
-        );
+        if (selectedWorkerFilter !== "ALL") {
+          const matchesWorker =
+            String(log.workerId) === selectedWorkerFilter ||
+            log.workerName === selectedWorkerFilter;
+          if (!matchesWorker) return false;
+        }
+        if (selectedCantiereFilter !== "ALL") {
+          const matchesCantiere =
+            log.locationName === selectedCantiereFilter ||
+            (log.address && log.address.includes(selectedCantiereFilter));
+          if (!matchesCantiere) return false;
+        }
+        return true;
       })
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [logs, monthYearKey, selectedWorkerFilter]);
+  }, [logs, monthYearKey, selectedWorkerFilter, selectedCantiereFilter]);
 
   // Calculations
   const totalMonthlyHours = useMemo(() => {
@@ -321,6 +331,23 @@ _Inviato da ElettroOre Italia_`;
               <span>{selectedWorker?.name || currentDisplayWorkerName}</span>
             </div>
           )}
+
+          {/* Cantiere Filter Dropdown */}
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5">
+            <HardHat className="w-4 h-4 text-amber-600" />
+            <select
+              value={selectedCantiereFilter}
+              onChange={(e) => setSelectedCantiereFilter(e.target.value)}
+              className="bg-transparent text-sm text-slate-800 font-bold focus:outline-none cursor-pointer"
+            >
+              <option value="ALL">{lang === "ar" ? "🏗️ كل مواقع العمل" : "🏗️ Tutti i Cantieri"}</option>
+              {cantieri.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* Month Selector Controls */}
           <div className="flex items-center gap-1.5">

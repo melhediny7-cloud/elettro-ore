@@ -5,10 +5,11 @@ import { Header } from "../components/Header";
 import { PWAInstallBanner } from "../components/PWAInstallBanner";
 import { LiveClockIn } from "../components/LiveClockIn";
 import { WorkerManagerView } from "../components/WorkerManagerView";
+import { CantieriManagerView } from "../components/CantieriManagerView";
 import { DailyLogManager } from "../components/DailyLogManager";
 import { MonthlyReportView } from "../components/MonthlyReportView";
 import { SettingsView } from "../components/SettingsView";
-import { WorkLogEntry, WorkerProfile, fetchWorkLogs, fetchWorkers, fetchAppSettings } from "../utils/api";
+import { WorkLogEntry, WorkerProfile, WorkSite, fetchWorkLogs, fetchWorkers, fetchWorkSites, fetchAppSettings } from "../utils/api";
 import { Language, translations } from "../utils/i18n";
 
 export const Route = createFileRoute("/")({
@@ -16,10 +17,11 @@ export const Route = createFileRoute("/")({
 });
 
 function AppHome() {
-  const [activeTab, setActiveTab] = useState<"timbratrice" | "lavoratori" | "registro" | "report" | "impostazioni">("timbratrice");
+  const [activeTab, setActiveTab] = useState<"timbratrice" | "lavoratori" | "cantieri" | "registro" | "report" | "impostazioni">("timbratrice");
   const [userRole, setUserRole] = useState<"worker" | "admin">("worker");
   const [logs, setLogs] = useState<WorkLogEntry[]>([]);
   const [workers, setWorkers] = useState<WorkerProfile[]>([]);
+  const [cantieri, setCantieri] = useState<WorkSite[]>([]);
   const [selectedWorker, setSelectedWorker] = useState<WorkerProfile | null>(null);
   const [isWorkerLoggedIn, setIsWorkerLoggedIn] = useState(false);
   const [loginWorkerId, setLoginWorkerId] = useState<number | null>(null);
@@ -137,6 +139,16 @@ function AppHome() {
     }
   }, []);
 
+  // Fetch cantieri
+  const refreshCantieri = useCallback(async () => {
+    try {
+      const data = await fetchWorkSites();
+      setCantieri(data || []);
+    } catch (err) {
+      console.error("Error refreshing cantieri:", err);
+    }
+  }, []);
+
   // Fetch logs
   const refreshLogs = useCallback(async () => {
     setLoading(true);
@@ -152,8 +164,9 @@ function AppHome() {
 
   useEffect(() => {
     refreshWorkers();
+    refreshCantieri();
     refreshLogs();
-  }, [refreshWorkers, refreshLogs]);
+  }, [refreshWorkers, refreshCantieri, refreshLogs]);
 
   const t = translations[lang];
 
@@ -195,6 +208,7 @@ function AppHome() {
                 logs={logs}
                 selectedWorker={selectedWorker}
                 workers={workers}
+                cantieri={cantieri}
                 onSelectWorker={handleSelectWorker}
                 onRefresh={refreshLogs}
                 defaultLocation={defaultLocation}
@@ -214,11 +228,22 @@ function AppHome() {
               />
             )}
 
+            {/* Manager: Multi-Cantiere Management */}
+            {activeTab === "cantieri" && userRole === "admin" && (
+              <CantieriManagerView
+                cantieri={cantieri}
+                logs={logs}
+                onRefreshCantieri={refreshCantieri}
+                lang={lang}
+              />
+            )}
+
             {/* Daily Log Manager (Registro) */}
             {activeTab === "registro" && (
               <DailyLogManager
                 logs={logs}
                 workers={workers}
+                cantieri={cantieri}
                 selectedWorker={selectedWorker}
                 onRefresh={refreshLogs}
                 defaultLocation={defaultLocation}
@@ -232,6 +257,7 @@ function AppHome() {
               <MonthlyReportView
                 logs={logs}
                 workers={workers}
+                cantieri={cantieri}
                 companyName={companyName}
                 lang={lang}
                 userRole={userRole}
@@ -250,6 +276,7 @@ function AppHome() {
                 setAdminPin={setAdminPin}
                 onRefresh={() => {
                   refreshWorkers();
+                  refreshCantieri();
                   refreshLogs();
                 }}
                 lang={lang}

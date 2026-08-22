@@ -1,12 +1,13 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Edit2, MapPin, Search, Calendar, Clock, ExternalLink, Navigation, Check, X, RefreshCw, Coins, User, Users, Lock, ShieldCheck } from "lucide-react";
-import { WorkLogEntry, WorkerProfile, createWorkLog, updateWorkLog, deleteWorkLog, clearAllWorkLogs, calculateNetHours, calculateTotalPay } from "../utils/api";
+import { Plus, Trash2, Edit2, MapPin, Search, Calendar, Clock, ExternalLink, Navigation, Check, X, RefreshCw, Coins, User, Users, Lock, ShieldCheck, HardHat } from "lucide-react";
+import { WorkLogEntry, WorkerProfile, WorkSite, createWorkLog, updateWorkLog, deleteWorkLog, clearAllWorkLogs, calculateNetHours, calculateTotalPay } from "../utils/api";
 import { formatDateIT, getCurrentDateISO, PRESET_LOCATIONS_IT, WORK_TYPES_IT, reverseGeocode, parseWorkplaceZone, verifyWorkerGeofence } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
 
 interface DailyLogManagerProps {
   logs: WorkLogEntry[];
   workers: WorkerProfile[];
+  cantieri?: WorkSite[];
   selectedWorker?: WorkerProfile | null;
   onRefresh: () => void;
   defaultLocation: string;
@@ -17,6 +18,7 @@ interface DailyLogManagerProps {
 export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
   logs,
   workers,
+  cantieri = [],
   selectedWorker,
   onRefresh,
   defaultLocation,
@@ -28,6 +30,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTypeFilter, setSelectedTypeFilter] = useState("TUTTI");
   const [selectedWorkerFilter, setSelectedWorkerFilter] = useState("ALL");
+  const [selectedCantiereFilter, setSelectedCantiereFilter] = useState("ALL");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLog, setEditingLog] = useState<WorkLogEntry | null>(null);
 
@@ -282,7 +285,12 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
           String(log.workerId) === selectedWorkerFilter ||
           log.workerName === selectedWorkerFilter;
 
-    return matchesSearch && matchesType && matchesWorker;
+    const matchesCantiere =
+      selectedCantiereFilter === "ALL" ||
+      log.locationName === selectedCantiereFilter ||
+      (log.address && log.address.includes(selectedCantiereFilter));
+
+    return matchesSearch && matchesType && matchesWorker && matchesCantiere;
   });
 
   return (
@@ -319,8 +327,8 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
       </div>
 
       {/* Filter & Search Controls */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3">
-        <div className="relative flex-1">
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
             type="text"
@@ -349,6 +357,23 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
             </select>
           </div>
         )}
+
+        {/* Cantiere Filter */}
+        <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5">
+          <HardHat className="w-4 h-4 text-amber-600" />
+          <select
+            value={selectedCantiereFilter}
+            onChange={(e) => setSelectedCantiereFilter(e.target.value)}
+            className="bg-transparent text-sm text-slate-800 font-bold focus:outline-none cursor-pointer"
+          >
+            <option value="ALL">{lang === "ar" ? "🏗️ كل مواقع العمل" : "🏗️ Tutti i Cantieri"}</option>
+            {cantieri.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
         {/* Work Type Filter */}
         <select

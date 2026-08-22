@@ -39,6 +39,7 @@ interface LiveClockInProps {
   logs: WorkLogEntry[];
   selectedWorker: WorkerProfile | null;
   workers: WorkerProfile[];
+  cantieri?: WorkSite[];
   onSelectWorker: (worker: WorkerProfile) => void;
   onRefresh: () => void;
   defaultLocation: string;
@@ -50,6 +51,7 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
   logs,
   selectedWorker,
   workers,
+  cantieri = [],
   onSelectWorker,
   onRefresh,
   defaultLocation,
@@ -60,8 +62,12 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
   const workplaceZone = parseWorkplaceZone(defaultLocation);
 
   const [now, setNow] = useState(new Date());
-  const [selectedLocation, setSelectedLocation] = useState(workplaceZone.name || defaultLocation || "Ufficio Sede");
-  const [customAddress, setCustomAddress] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState(
+    cantieri.length > 0 ? cantieri[0].name : workplaceZone.name || defaultLocation || "Ufficio Sede"
+  );
+  const [customAddress, setCustomAddress] = useState(
+    cantieri.length > 0 ? cantieri[0].address : ""
+  );
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [geoLoading, setGeoLoading] = useState(false);
   const [selectedWorkType, setSelectedWorkType] = useState("Ordinario");
@@ -214,16 +220,43 @@ _تنبيه تلقائي من نظام ElettroOre_`;
         setCustomAddress(addr);
         setGeoLoading(false);
 
-        if (geoCheck.allowed) {
+        // Smart Cantiere Auto-Detection
+        let matchedCantiere: WorkSite | null = null;
+        let minDistanceKm = Infinity;
+
+        if (cantieri && cantieri.length > 0) {
+          for (const c of cantieri) {
+            if (c.status === "attivo" && c.latitude && c.longitude) {
+              const d = calculateDistanceKm(latitude, longitude, c.latitude, c.longitude);
+              if (d < minDistanceKm) {
+                minDistanceKm = d;
+                if (d <= (c.radiusKm || 2.0)) {
+                  matchedCantiere = c;
+                }
+              }
+            }
+          }
+        }
+
+        if (matchedCantiere) {
+          setSelectedLocation(matchedCantiere.name);
+          setCustomAddress(matchedCantiere.address);
           setStatusMessage({
             type: "success",
-            text: `✅ Posizione GPS Verificata: ${addr} (Distanza dal cantiere: ${geoCheck.distanceKm} km)`,
+            text: lang === "ar"
+              ? `📍 تم التعرف على تواجدك في: ${matchedCantiere.name} (~${Math.round(minDistanceKm * 1000)}م)`
+              : `📍 Rilevato cantiere: ${matchedCantiere.name} (~${Math.round(minDistanceKm * 1000)}m)`,
+          });
+        } else if (geoCheck.allowed) {
+          setStatusMessage({
+            type: "success",
+            text: `✅ Posizione GPS Verificata: ${addr} (Distanza: ${geoCheck.distanceKm} km)`,
           });
         } else {
           playGeofenceAlarmSound();
           setStatusMessage({
             type: "error",
-            text: `⚠️ Attenzione: Sei a ${geoCheck.distanceKm} km dal cantiere (Limite: ${workplaceZone.radiusKm} km). Timbratura bloccata.`,
+            text: `⚠️ Attenzione: Sei a ${geoCheck.distanceKm} km dal cantiere (Limite: ${workplaceZone.radiusKm} km).`,
           });
         }
       },
@@ -614,19 +647,37 @@ _تم الإرسال تلقائياً من تطبيق ElettroOre Italia_`;
               </div>
             </div>
 
-            {/* Location Selection */}
+            {/* Location / Cantiere Selection */}
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Luogo / Sede di Lavoro</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                {lang === "ar" ? "🏗️ موقع العمل / المشروع (Cantiere)" : "🏗️ Luogo / Cantiere di Lavoro"}
+              </label>
               <select
                 value={selectedLocation}
-                onChange={(e) => setSelectedLocation(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={(e) => {
+                  setSelectedLocation(e.target.value);
+                  const matched = cantieri?.find((c) => c.name === e.target.value);
+                  if (matched) {
+                    setCustomAddress(matched.address);
+                  }
+                }}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
               >
-                {PRESET_LOCATIONS_IT.map((loc) => (
-                  <option key={loc} value={loc}>
-                    {loc}
-                  </option>
-                ))}
+                {cantieri && cantieri.length > 0 ? (
+                  cantieri
+                    .filter((c) => c.status === "attivo")
+                    .map((c) => (
+                      <option key={c.id} value={c.name}>
+                        🏗️ {c.name} {c.code ? `(${c.code})` : ""}
+                      </option>
+                    ))
+                ) : (
+                  PRESET_LOCATIONS_IT.map((loc) => (
+                    <option key={loc} value={loc}>
+                      {loc}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
           </div>

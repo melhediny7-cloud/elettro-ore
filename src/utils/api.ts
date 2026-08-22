@@ -30,6 +30,19 @@ export interface WorkLogEntry {
   updatedAt?: string;
 }
 
+export interface WorkSite {
+  id: string;
+  name: string;
+  code?: string;
+  address: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  radiusKm?: number;
+  clientName?: string;
+  status?: "attivo" | "completato";
+  createdAt?: string;
+}
+
 export interface AppSettings {
   id: string;
   companyName: string;
@@ -50,12 +63,102 @@ const headers = {
 
 const LOCAL_STORAGE_LOGS_KEY = "oralavoro_work_logs_v1";
 const LOCAL_STORAGE_WORKERS_KEY = "oralavoro_workers_v1";
+const LOCAL_STORAGE_CANTIERI_KEY = "oralavoro_cantieri_v1";
 
 export const DEFAULT_WORKERS: WorkerProfile[] = [
   { id: 1, name: "Mario Rossi", hourlyRate: "15.00", role: "Caposquadra", phone: "+39 340 1234567", pin: "1111" },
   { id: 2, name: "Mohamed Ali", hourlyRate: "16.50", role: "Tecnico Specializzato", phone: "+39 349 9876543", pin: "2222" },
   { id: 3, name: "Marco Bianchi", hourlyRate: "14.00", role: "Operaio Edile", phone: "+39 333 5551234", pin: "3333" },
 ];
+
+export const DEFAULT_WORKSITES: WorkSite[] = [
+  {
+    id: "site-1",
+    name: "Ospedale Sacco - Milano",
+    code: "MIL-SACCO",
+    address: "Via Giovanni Battista Grassi 74, 20157 Milano MI",
+    latitude: 45.5188,
+    longitude: 9.1245,
+    radiusKm: 2.0,
+    clientName: "ASST Fatebenefratelli Sacco",
+    status: "attivo",
+  },
+  {
+    id: "site-2",
+    name: "Cantiere Residenziale Monza",
+    code: "MNZ-RES",
+    address: "Via Undici Febbraio, San Giuliano Milanese",
+    latitude: 45.3956,
+    longitude: 9.2882,
+    radiusKm: 2.5,
+    clientName: "Immobiliare Nord",
+    status: "attivo",
+  },
+  {
+    id: "site-3",
+    name: "Sede Centrale / Ufficio Milano",
+    code: "HQ-MIL",
+    address: "Via Dante 12, Milano MI",
+    latitude: 45.4668,
+    longitude: 9.1865,
+    radiusKm: 1.5,
+    clientName: "Sede Aziendale",
+    status: "attivo",
+  },
+];
+
+export function getLocalWorkSites(): WorkSite[] {
+  if (typeof window === "undefined") return DEFAULT_WORKSITES;
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_CANTIERI_KEY);
+    if (!raw) {
+      saveLocalWorkSites(DEFAULT_WORKSITES);
+      return DEFAULT_WORKSITES;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return DEFAULT_WORKSITES;
+  }
+}
+
+export function saveLocalWorkSites(sites: WorkSite[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(LOCAL_STORAGE_CANTIERI_KEY, JSON.stringify(sites));
+  } catch (e) {
+    console.error("Failed to save work sites to localStorage", e);
+  }
+}
+
+export async function fetchWorkSites(): Promise<WorkSite[]> {
+  return getLocalWorkSites();
+}
+
+export async function createWorkSite(site: Omit<WorkSite, "id">): Promise<WorkSite> {
+  const newSite: WorkSite = {
+    ...site,
+    id: `site-${Date.now()}`,
+    createdAt: new Date().toISOString(),
+  };
+  const list = getLocalWorkSites();
+  const updated = [newSite, ...list];
+  saveLocalWorkSites(updated);
+  return newSite;
+}
+
+export async function updateWorkSite(site: WorkSite): Promise<WorkSite> {
+  const list = getLocalWorkSites();
+  const updated = list.map((s) => (s.id === site.id ? site : s));
+  saveLocalWorkSites(updated);
+  return site;
+}
+
+export async function deleteWorkSite(id: string): Promise<boolean> {
+  const list = getLocalWorkSites();
+  const updated = list.filter((s) => s.id !== id);
+  saveLocalWorkSites(updated);
+  return true;
+}
 
 // Helper to calculate hours between HH:mm start and HH:mm end
 export function calculateNetHours(startTime: string, endTime: string, breakMinutes: number = 0): string {

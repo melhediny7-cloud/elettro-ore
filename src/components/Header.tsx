@@ -1,12 +1,12 @@
 import React, { useState } from "react";
-import { Clock, Calendar, FileText, Settings, MapPin, Globe, Shield, ShieldCheck, Users, Lock, Unlock, User, LogOut } from "lucide-react";
+import { Clock, Calendar, FileText, Settings, MapPin, Globe, Shield, ShieldCheck, Users, Lock, Unlock, User, LogOut, HardHat } from "lucide-react";
 import { formatDateIT, getCurrentDateISO } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
 import { WorkerProfile, verifyAdminPin } from "../utils/api";
 
 interface HeaderProps {
-  activeTab: "timbratrice" | "lavoratori" | "registro" | "report" | "impostazioni";
-  setActiveTab: (tab: "timbratrice" | "lavoratori" | "registro" | "report" | "impostazioni") => void;
+  activeTab: "timbratrice" | "lavoratori" | "cantieri" | "registro" | "report" | "impostazioni";
+  setActiveTab: (tab: "timbratrice" | "lavoratori" | "cantieri" | "registro" | "report" | "impostazioni") => void;
   userRole: "worker" | "admin";
   setUserRole: (role: "worker" | "admin") => void;
   workers: WorkerProfile[];
@@ -258,6 +258,18 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <Users className="w-4 h-4 text-amber-300" />
                 <span>{t.navWorkers}</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab("cantieri")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === "cantieri"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-900/30 font-semibold"
+                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <HardHat className="w-4 h-4 text-orange-400" />
+                <span>{lang === "ar" ? "مواقع العمل" : "Cantieri"}</span>
               </button>
 
               <button
