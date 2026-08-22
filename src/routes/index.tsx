@@ -48,13 +48,14 @@ function AppHome() {
       const storedLoc = localStorage.getItem("oralavoro_defaultLocation");
       const storedLang = localStorage.getItem("oralavoro_lang") as Language;
       const storedPin = localStorage.getItem("oralavoro_adminPin");
-      const storedRole = localStorage.getItem("oralavoro_userRole") as "worker" | "admin";
 
       if (storedCompany) setCompanyName(storedCompany);
       if (storedLoc) setDefaultLocation(storedLoc);
       if (storedPin) setAdminPin(storedPin);
-      if (storedRole === "worker" || storedRole === "admin") setUserRole(storedRole);
       if (storedLang === "it" || storedLang === "ar") setLangState(storedLang);
+      
+      // Always ensure worker mode on initial load
+      setUserRole("worker");
     }
 
     fetchAppSettings().then((settings) => {
@@ -68,9 +69,6 @@ function AppHome() {
 
   const handleSetUserRole = (role: "worker" | "admin") => {
     setUserRole(role);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("oralavoro_userRole", role);
-    }
   };
 
   // Refresh workers list
