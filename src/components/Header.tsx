@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Clock, Calendar, FileText, Settings, MapPin, Globe, Shield, ShieldCheck, Users, Lock, Unlock, User } from "lucide-react";
+import { Clock, Calendar, FileText, Settings, MapPin, Globe, Shield, ShieldCheck, Users, Lock, Unlock, User, LogOut } from "lucide-react";
 import { formatDateIT, getCurrentDateISO } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
 import { WorkerProfile, verifyAdminPin } from "../utils/api";
@@ -12,6 +12,7 @@ interface HeaderProps {
   workers: WorkerProfile[];
   selectedWorker: WorkerProfile | null;
   onSelectWorker: (worker: WorkerProfile) => void;
+  onWorkerLogout?: () => void;
   adminPin: string;
   lang: Language;
   setLang: (lang: Language) => void;
@@ -25,6 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
   workers,
   selectedWorker,
   onSelectWorker,
+  onWorkerLogout,
   adminPin,
   lang,
   setLang,
@@ -177,10 +179,22 @@ export const Header: React.FC<HeaderProps> = ({
                   </select>
                 </div>
               ) : (
-                <div className="flex items-center bg-slate-800/90 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-200 font-bold gap-1.5 shadow-inner">
-                  <User className="w-3.5 h-3.5 text-blue-400" />
-                  <span>{selectedWorker?.name || workers[0]?.name}</span>
-                  <Lock className="w-3 h-3 text-slate-400" />
+                <div className="flex items-center bg-slate-800/90 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs text-slate-200 font-bold gap-2 shadow-inner">
+                  <div className="flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5 text-blue-400" />
+                    <span>{selectedWorker?.name || workers[0]?.name}</span>
+                  </div>
+                  {onWorkerLogout && (
+                    <button
+                      type="button"
+                      onClick={onWorkerLogout}
+                      title={lang === "ar" ? "تسجيل الخروج / تبديل الحساب" : "Cambia account / Disconnetti"}
+                      className="text-slate-400 hover:text-rose-400 transition-colors p-0.5 ml-1 border-l border-slate-700 pl-1.5 cursor-pointer flex items-center gap-1"
+                    >
+                      <LogOut className="w-3 h-3" />
+                      <span className="text-[10px] hidden sm:inline">{lang === "ar" ? "خروج" : "Esci"}</span>
+                    </button>
+                  )}
                 </div>
               )
             )}

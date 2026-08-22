@@ -21,7 +21,10 @@ function AppHome() {
   const [logs, setLogs] = useState<WorkLogEntry[]>([]);
   const [workers, setWorkers] = useState<WorkerProfile[]>([]);
   const [selectedWorker, setSelectedWorker] = useState<WorkerProfile | null>(null);
-  const [showFirstTimeWorkerPicker, setShowFirstTimeWorkerPicker] = useState(false);
+  const [isWorkerLoggedIn, setIsWorkerLoggedIn] = useState(false);
+  const [loginWorkerId, setLoginWorkerId] = useState<number | null>(null);
+  const [loginWorkerPin, setLoginWorkerPin] = useState("");
+  const [loginPinError, setLoginPinError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [lang, setLangState] = useState<Language>("it");
 
@@ -42,6 +45,34 @@ function AppHome() {
     if (typeof window !== "undefined") {
       localStorage.setItem("oralavoro_selected_worker_id", String(worker.id));
     }
+  };
+
+  const handleWorkerLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const target = workers.find((w) => w.id === Number(loginWorkerId));
+    if (!target) return;
+    const correctPin = target.pin || "1234";
+    if (loginWorkerPin.trim() === correctPin.trim()) {
+      setSelectedWorker(target);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("oralavoro_worker_auth_id", String(target.id));
+        localStorage.setItem("oralavoro_selected_worker_id", String(target.id));
+      }
+      setIsWorkerLoggedIn(true);
+      setLoginPinError(false);
+      setLoginWorkerPin("");
+    } else {
+      setLoginPinError(true);
+    }
+  };
+
+  const handleWorkerLogout = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("oralavoro_worker_auth_id");
+    }
+    setIsWorkerLoggedIn(false);
+    setLoginWorkerPin("");
+    setLoginPinError(false);
   };
 
   // Load stored settings and cloud settings on client mount
@@ -84,20 +115,21 @@ function AppHome() {
       const data = await fetchWorkers();
       setWorkers(data || []);
       
-      // Auto select first worker or retrieve stored worker ID
+      // Auto select authenticated worker or prompt PIN login
       if (data && data.length > 0) {
-        const storedWorkerId = typeof window !== "undefined" ? localStorage.getItem("oralavoro_selected_worker_id") : null;
-        if (storedWorkerId) {
-          const matched = data.find((w) => String(w.id) === storedWorkerId);
+        const authWorkerId = typeof window !== "undefined" ? localStorage.getItem("oralavoro_worker_auth_id") : null;
+        if (authWorkerId) {
+          const matched = data.find((w) => String(w.id) === authWorkerId);
           if (matched) {
             setSelectedWorker(matched);
+            setLoginWorkerId(matched.id);
+            setIsWorkerLoggedIn(true);
             return;
           }
         }
-        // If not stored and there are multiple workers, prompt worker to bind this device
-        if (data.length > 1) {
-          setShowFirstTimeWorkerPicker(true);
-        }
+        // If not authenticated
+        setIsWorkerLoggedIn(false);
+        setLoginWorkerId(data[0].id);
         setSelectedWorker(data[0]);
       }
     } catch (err) {
@@ -142,6 +174,7 @@ function AppHome() {
         workers={workers}
         selectedWorker={selectedWorker}
         onSelectWorker={handleSelectWorker}
+        onWorkerLogout={handleWorkerLogout}
         adminPin={adminPin}
         lang={lang}
         setLang={setLang}
@@ -253,48 +286,78 @@ function AppHome() {
         </div>
       </footer>
 
-      {/* ONE-TIME WORKER DEVICE BINDING MODAL */}
-      {showFirstTimeWorkerPicker && workers.length > 1 && (
+      {/* WORKER PIN LOGIN SCREEN */}
+      {userRole === "worker" && !isWorkerLoggedIn && workers.length > 0 && (
         <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 print:hidden animate-in fade-in">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 text-center border border-slate-100">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-6 text-center border border-slate-100">
             <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
-              <User className="w-8 h-8" />
+              <Lock className="w-8 h-8" />
             </div>
 
             <div>
               <h3 className="text-xl font-black text-slate-900">
-                {lang === "ar" ? "اختر اسمك لتسجيل الدخول 📲" : "Identificati per iniziare 📲"}
+                {lang === "ar" ? "تسجيل دخول العامل 🔐" : "Accesso Dipendente 🔐"}
               </h3>
               <p className="text-xs text-slate-500 mt-1.5 leading-relaxed font-medium">
                 {lang === "ar"
-                  ? "يرجى تحديد حسابك الشخصي لربط هذا الهاتف بك. بعد التحديد ستتمكن فقط من إدارة وتسجيل ساعاتك الشخصية ولن يظهر لك ساعات العمال الآخرين."
-                  : "Seleziona il tuo profilo per associare questo telefono. Potrai visualizzare e timbrare esclusivamente le tue ore personali."}
+                  ? "اختر اسمك وأدخل رمز المرور السري الخاص بك (PIN) لتسجيل الدخول إلى حسابك وساعاتك الشخصية فقط."
+                  : "Seleziona il tuo profilo e inserisci il tuo PIN personale per accedere alle tue ore personali."}
               </p>
             </div>
 
-            <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
-              {workers.map((w) => (
-                <button
-                  key={w.id}
-                  type="button"
-                  onClick={() => {
-                    handleSelectWorker(w);
-                    setShowFirstTimeWorkerPicker(false);
+            <form onSubmit={handleWorkerLoginSubmit} className="space-y-4 text-left">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  {lang === "ar" ? "👤 اختر اسمك:" : "👤 Seleziona Lavoratore:"}
+                </label>
+                <select
+                  value={loginWorkerId || workers[0]?.id}
+                  onChange={(e) => {
+                    setLoginWorkerId(Number(e.target.value));
+                    setLoginPinError(false);
                   }}
-                  className="w-full p-3.5 rounded-2xl border-2 border-slate-200 hover:border-blue-500 bg-slate-50 hover:bg-blue-50/50 font-bold text-sm flex items-center justify-between transition-all cursor-pointer group text-slate-800"
+                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-blue-600 group-hover:bg-blue-700 text-white font-black flex items-center justify-center text-xs shadow-sm">
-                      {w.name[0]}
-                    </div>
-                    <span className="text-sm">{w.name}</span>
-                  </div>
-                  <span className="text-xs text-blue-600 group-hover:text-blue-700 font-bold bg-blue-100/70 px-2.5 py-1 rounded-lg">
-                    {lang === "ar" ? "تأكيد الدخول 👈" : "Accedi 👈"}
-                  </span>
-                </button>
-              ))}
-            </div>
+                  {workers.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({w.role || "Operaio"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  {lang === "ar" ? "🔑 رمز المرور السري (PIN):" : "🔑 Codice PIN Personale:"}
+                </label>
+                <input
+                  type="password"
+                  required
+                  autoFocus
+                  value={loginWorkerPin}
+                  onChange={(e) => {
+                    setLoginWorkerPin(e.target.value);
+                    setLoginPinError(false);
+                  }}
+                  placeholder="••••"
+                  maxLength={8}
+                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-300 rounded-xl text-center text-lg font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {loginPinError && (
+                  <p className="text-xs text-rose-600 font-bold mt-1.5 text-center animate-bounce">
+                    {lang === "ar" ? "❌ رمز المرور غير صحيح! يرجى التأكد من المدير." : "❌ Codice PIN errato! Riprova."}
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+              >
+                <Check className="w-4 h-4" />
+                <span>{lang === "ar" ? "دخول إلى صفحتي الشخصية 🚀" : "Accedi al Mio Profilo 🚀"}</span>
+              </button>
+            </form>
           </div>
         </div>
       )}

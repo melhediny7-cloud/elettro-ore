@@ -26,6 +26,7 @@ export const WorkerManagerView: React.FC<WorkerManagerViewProps> = ({
     hourlyRate: "15.00",
     role: "Operaio",
     phone: "",
+    pin: "1234",
   });
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -40,6 +41,7 @@ export const WorkerManagerView: React.FC<WorkerManagerViewProps> = ({
       hourlyRate: "15.00",
       role: "Operaio",
       phone: "",
+      pin: "1234",
     });
     setIsModalOpen(true);
   };
@@ -51,6 +53,7 @@ export const WorkerManagerView: React.FC<WorkerManagerViewProps> = ({
       hourlyRate: worker.hourlyRate || "15.00",
       role: worker.role || "Operaio",
       phone: worker.phone || "",
+      pin: worker.pin || "1234",
     });
     setIsModalOpen(true);
   };
@@ -69,6 +72,7 @@ export const WorkerManagerView: React.FC<WorkerManagerViewProps> = ({
           hourlyRate: formData.hourlyRate,
           role: formData.role,
           phone: formData.phone || null,
+          pin: formData.pin?.trim() || "1234",
         });
         setMsg({ type: "success", text: t.workerUpdatedSuccess });
       } else {
@@ -77,6 +81,7 @@ export const WorkerManagerView: React.FC<WorkerManagerViewProps> = ({
           hourlyRate: formData.hourlyRate,
           role: formData.role,
           phone: formData.phone || null,
+          pin: formData.pin?.trim() || "1234",
         });
         setMsg({ type: "success", text: t.workerAddedSuccess });
       }
@@ -243,6 +248,7 @@ export const WorkerManagerView: React.FC<WorkerManagerViewProps> = ({
               <tr>
                 <th className="px-5 py-3.5">{t.workerLabel}</th>
                 <th className="px-4 py-3.5">{t.workerRole}</th>
+                <th className="px-4 py-3.5">🔑 PIN / Password</th>
                 <th className="px-4 py-3.5">{t.workerPhone}</th>
                 <th className="px-4 py-3.5">{t.hourlyRateLabel}</th>
                 <th className="px-4 py-3.5">Giorni / Ore Registrate</th>
@@ -278,6 +284,13 @@ export const WorkerManagerView: React.FC<WorkerManagerViewProps> = ({
                     <td className="px-4 py-4 whitespace-nowrap">
                       <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                         {worker.role || "Operaio"}
+                      </span>
+                    </td>
+
+                    {/* Worker PIN */}
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-amber-50 text-amber-900 border border-amber-200 shadow-sm">
+                        🔑 {worker.pin || "1234"}
                       </span>
                     </td>
 
@@ -362,6 +375,24 @@ export const WorkerManagerView: React.FC<WorkerManagerViewProps> = ({
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="es: Mario Rossi / محمد علي"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1 flex items-center justify-between">
+                  <span>{lang === "ar" ? "🔑 رمز مرور العامل (PIN / Password): *" : "🔑 PIN Personale Lavoratore: *"}</span>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    {lang === "ar" ? "الرمز السري للدخول" : "Codice segreto"}
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.pin || ""}
+                  onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                  placeholder="1234"
+                  maxLength={8}
+                  className="w-full px-3.5 py-2.5 bg-amber-50/60 border border-amber-300 rounded-lg text-sm text-slate-900 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
 

@@ -4,6 +4,7 @@ export interface WorkerProfile {
   hourlyRate: string; // e.g. "15.00"
   role?: string; // e.g. "Operaio", "Caposquadra", "Tecnico"
   phone?: string | null;
+  pin?: string; // e.g. "1234"
   createdAt?: string;
 }
 
@@ -51,9 +52,9 @@ const LOCAL_STORAGE_LOGS_KEY = "oralavoro_work_logs_v1";
 const LOCAL_STORAGE_WORKERS_KEY = "oralavoro_workers_v1";
 
 export const DEFAULT_WORKERS: WorkerProfile[] = [
-  { id: 1, name: "Mario Rossi", hourlyRate: "15.00", role: "Caposquadra", phone: "+39 340 1234567" },
-  { id: 2, name: "Mohamed Ali", hourlyRate: "16.50", role: "Tecnico Specializzato", phone: "+39 349 9876543" },
-  { id: 3, name: "Marco Bianchi", hourlyRate: "14.00", role: "Operaio Edile", phone: "+39 333 5551234" },
+  { id: 1, name: "Mario Rossi", hourlyRate: "15.00", role: "Caposquadra", phone: "+39 340 1234567", pin: "1111" },
+  { id: 2, name: "Mohamed Ali", hourlyRate: "16.50", role: "Tecnico Specializzato", phone: "+39 349 9876543", pin: "2222" },
+  { id: 3, name: "Marco Bianchi", hourlyRate: "14.00", role: "Operaio Edile", phone: "+39 333 5551234", pin: "3333" },
 ];
 
 // Helper to calculate hours between HH:mm start and HH:mm end
@@ -120,14 +121,25 @@ export async function fetchWorkers(): Promise<WorkerProfile[]> {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
-        const mapped: WorkerProfile[] = data.map((w: any) => ({
-          id: w.id,
-          name: w.name,
-          hourlyRate: String(w.hourly_rate || "15.00"),
-          role: w.role || "Operaio",
-          phone: w.phone || null,
-          createdAt: w.created_at,
-        }));
+        const mapped: WorkerProfile[] = data.map((w: any) => {
+          let rawPhone = w.phone || "";
+          let pin = "1234";
+          let cleanPhone = rawPhone;
+          if (rawPhone.includes("| PIN:")) {
+            const parts = rawPhone.split("| PIN:");
+            cleanPhone = parts[0].trim();
+            pin = parts[1].trim() || "1234";
+          }
+          return {
+            id: w.id,
+            name: w.name,
+            hourlyRate: String(w.hourly_rate || "15.00"),
+            role: w.role || "Operaio",
+            phone: cleanPhone || null,
+            pin: pin,
+            createdAt: w.created_at,
+          };
+        });
         saveLocalWorkers(mapped);
         return mapped;
       }
@@ -139,6 +151,11 @@ export async function fetchWorkers(): Promise<WorkerProfile[]> {
 }
 
 export async function createWorker(worker: Omit<WorkerProfile, "id">): Promise<WorkerProfile> {
+  const pin = worker.pin || "1234";
+  const phoneToStore = worker.phone 
+    ? `${worker.phone.trim()} | PIN:${pin}`
+    : `| PIN:${pin}`;
+
   try {
     const res = await fetch(`${SUPABASE_URL}/workers`, {
       method: "POST",
@@ -147,7 +164,7 @@ export async function createWorker(worker: Omit<WorkerProfile, "id">): Promise<W
         name: worker.name.trim(),
         hourly_rate: parseFloat(worker.hourlyRate) || 15.0,
         role: worker.role || "Operaio",
-        phone: worker.phone || null,
+        phone: phoneToStore,
       }),
     });
     if (res.ok) {
@@ -158,7 +175,8 @@ export async function createWorker(worker: Omit<WorkerProfile, "id">): Promise<W
         name: created.name,
         hourlyRate: String(created.hourly_rate || "15.00"),
         role: created.role || "Operaio",
-        phone: created.phone || null,
+        phone: worker.phone || null,
+        pin: pin,
         createdAt: created.created_at,
       };
       const local = getLocalWorkers();
@@ -171,6 +189,7 @@ export async function createWorker(worker: Omit<WorkerProfile, "id">): Promise<W
 
   const newLocal: WorkerProfile = {
     ...worker,
+    pin,
     id: Date.now(),
     createdAt: new Date().toISOString(),
   };
@@ -180,6 +199,11 @@ export async function createWorker(worker: Omit<WorkerProfile, "id">): Promise<W
 }
 
 export async function updateWorker(worker: WorkerProfile): Promise<WorkerProfile> {
+  const pin = worker.pin || "1234";
+  const phoneToStore = worker.phone 
+    ? `${worker.phone.trim()} | PIN:${pin}`
+    : `| PIN:${pin}`;
+
   try {
     const res = await fetch(`${SUPABASE_URL}/workers?id=eq.${worker.id}`, {
       method: "PATCH",
@@ -188,7 +212,7 @@ export async function updateWorker(worker: WorkerProfile): Promise<WorkerProfile
         name: worker.name.trim(),
         hourly_rate: parseFloat(worker.hourlyRate) || 15.0,
         role: worker.role || "Operaio",
-        phone: worker.phone || null,
+        phone: phoneToStore,
       }),
     });
     if (res.ok) {
@@ -199,7 +223,8 @@ export async function updateWorker(worker: WorkerProfile): Promise<WorkerProfile
         name: updated.name,
         hourlyRate: String(updated.hourly_rate || worker.hourlyRate),
         role: updated.role || worker.role,
-        phone: updated.phone || worker.phone,
+        phone: worker.phone || null,
+        pin: pin,
         createdAt: updated.created_at,
       };
       const local = getLocalWorkers();
@@ -211,8 +236,8 @@ export async function updateWorker(worker: WorkerProfile): Promise<WorkerProfile
   }
 
   const local = getLocalWorkers();
-  saveLocalWorkers(local.map((w) => (w.id === worker.id ? worker : w)));
-  return worker;
+  saveLocalWorkers(local.map((w) => (w.id === worker.id ? { ...worker, pin } : w)));
+  return { ...worker, pin };
 }
 
 export async function deleteWorker(id: number): Promise<boolean> {
