@@ -228,12 +228,14 @@ function AppHome() {
             )}
 
             {/* Monthly Report View (Report) */}
-            {activeTab === "report" && userRole === "admin" && (
+            {activeTab === "report" && (
               <MonthlyReportView
                 logs={logs}
                 workers={workers}
                 companyName={companyName}
                 lang={lang}
+                userRole={userRole}
+                selectedWorker={selectedWorker}
               />
             )}
 

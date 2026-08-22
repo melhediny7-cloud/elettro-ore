@@ -298,19 +298,33 @@ export const Header: React.FC<HeaderProps> = ({
             </>
           )}
 
-          {/* In worker mode: quick button to view their own days */}
+          {/* In worker mode: quick button to view their own days & monthly report with signature and WhatsApp */}
           {userRole === "worker" && (
-            <button
-              onClick={() => setActiveTab("registro")}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
-                activeTab === "registro"
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-900/30 font-semibold"
-                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
-              }`}
-            >
-              <Calendar className="w-4 h-4 text-indigo-300" />
-              <span>{t.navRegistry}</span>
-            </button>
+            <>
+              <button
+                onClick={() => setActiveTab("registro")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === "registro"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-900/30 font-semibold"
+                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <Calendar className="w-4 h-4 text-indigo-300" />
+                <span>{t.navRegistry}</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab("report")}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeTab === "report"
+                    ? "bg-blue-600 text-white shadow-md shadow-blue-900/30 font-semibold"
+                    : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                }`}
+              >
+                <FileText className="w-4 h-4 text-emerald-300" />
+                <span>{lang === "ar" ? "✍️ التوقيع وإرسال الساعات 📲" : "✍️ Firma & Invia Report 📲"}</span>
+              </button>
+            </>
           )}
         </nav>
       </div>

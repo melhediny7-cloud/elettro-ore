@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Printer, Download, Calendar, Clock, MapPin, Award, FileSpreadsheet, Building2, User, ChevronLeft, ChevronRight, Coins, Filter, Users, PenTool, Check, ShieldCheck } from "lucide-react";
+import { Printer, Download, Calendar, Clock, MapPin, Award, FileSpreadsheet, Building2, User, ChevronLeft, ChevronRight, Coins, Filter, Users, PenTool, Check, ShieldCheck, MessageSquare, Send } from "lucide-react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -22,20 +22,30 @@ interface MonthlyReportViewProps {
   workers: WorkerProfile[];
   companyName: string;
   lang: Language;
+  userRole?: "worker" | "admin";
+  selectedWorker?: WorkerProfile | null;
 }
 
-export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, workers, companyName, lang }) => {
+export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, workers, companyName, lang, userRole = "admin", selectedWorker }) => {
   const t = translations[lang];
   const currentDate = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<string>(
     String(currentDate.getMonth() + 1).padStart(2, "0")
   );
-  const [selectedWorkerFilter, setSelectedWorkerFilter] = useState<string>("ALL");
+  const [selectedWorkerFilter, setSelectedWorkerFilter] = useState<string>(
+    userRole === "worker" && selectedWorker ? String(selectedWorker.id) : "ALL"
+  );
   const [showSignatureDrawer, setShowSignatureDrawer] = useState(false);
 
   const [signatureWorker, setSignatureWorker] = useState<string | null>(null);
   const [signatureManager, setSignatureManager] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (userRole === "worker" && selectedWorker) {
+      setSelectedWorkerFilter(String(selectedWorker.id));
+    }
+  }, [userRole, selectedWorker]);
 
   const monthYearKey = `${selectedYear}-${selectedMonth}`;
 
@@ -246,6 +256,30 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, work
     return found ? found.name : selectedWorkerFilter;
   }, [selectedWorkerFilter, workers, t]);
 
+  const handleSendWhatsAppReport = () => {
+    const managerPhone = typeof window !== "undefined" ? localStorage.getItem("oralavoro_managerPhone") || "" : "";
+    const cleanPhone = managerPhone.replace(/[^0-9]/g, "");
+    const workerName = selectedWorker ? selectedWorker.name : currentDisplayWorkerName;
+    const isSigned = !!signatureWorker;
+    const daysCount = monthlyLogs.length;
+    const totalHoursStr = totalMonthlyHours.toFixed(2);
+
+    const msg = `📋 *REPORT MENSILE ORE DI LAVORO / تقرير الساعات الشهري*
+━━━━━━━━━━━━━━━━━━━━━
+👤 *LAVORATORE / اسم العامل:*
+👉 *${workerName}* 👈
+━━━━━━━━━━━━━━━━━━━━━
+📅 *MESE / الشهر:* ${selectedMonthName} ${selectedYear}
+⏱️ *ORE TOTALI / إجمالي الساعات:* ${totalHoursStr} ore
+🗓️ *GIORNI LAVORATI / أيام العمل:* ${daysCount} giorni
+✍️ *STATO FIRMA / التوقيع:* ${isSigned ? "✅ Firmato digitalmente (تم التوقيع باليد)" : "⏳ In attesa di firma"}
+━━━━━━━━━━━━━━━━━━━━━
+_Inviato da ElettroOre Italia_`;
+
+    const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, "_blank");
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       
@@ -264,28 +298,35 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, work
         {/* Worker Filter and Month Selector Controls */}
         <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
           
-          {/* Worker Filter Dropdown */}
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5">
-            <Users className="w-4 h-4 text-blue-600" />
-            <select
-              value={selectedWorkerFilter}
-              onChange={(e) => setSelectedWorkerFilter(e.target.value)}
-              className="bg-transparent text-sm text-slate-800 font-bold focus:outline-none cursor-pointer"
-            >
-              <option value="ALL">{t.allWorkers}</option>
-              {workers.map((w) => (
-                <option key={w.id} value={String(w.id)}>
-                  {w.name} ({w.hourlyRate} €/h)
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Worker Filter Dropdown (Admin only) or Locked Badge (Worker) */}
+          {userRole === "admin" ? (
+            <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5">
+              <Users className="w-4 h-4 text-blue-600" />
+              <select
+                value={selectedWorkerFilter}
+                onChange={(e) => setSelectedWorkerFilter(e.target.value)}
+                className="bg-transparent text-sm text-slate-800 font-bold focus:outline-none cursor-pointer"
+              >
+                <option value="ALL">{t.allWorkers}</option>
+                {workers.map((w) => (
+                  <option key={w.id} value={String(w.id)}>
+                    {w.name} ({w.hourlyRate} €/h)
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-3 py-1.5 text-blue-900 font-bold text-xs sm:text-sm">
+              <User className="w-4 h-4 text-blue-600" />
+              <span>{selectedWorker?.name || currentDisplayWorkerName}</span>
+            </div>
+          )}
 
           {/* Month Selector Controls */}
           <div className="flex items-center gap-1.5">
             <button
               onClick={handlePrevMonth}
-              className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 transition-all"
+              className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 transition-all cursor-pointer"
               title="Mese precedente"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -317,7 +358,7 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, work
 
             <button
               onClick={handleNextMonth}
-              className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 transition-all"
+              className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 transition-all cursor-pointer"
               title="Mese successivo"
             >
               <ChevronRight className="w-4 h-4" />
@@ -328,19 +369,29 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, work
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setShowSignatureDrawer(!showSignatureDrawer)}
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold shadow-md transition-all whitespace-nowrap ${
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all whitespace-nowrap cursor-pointer ${
                 signatureWorker || signatureManager
                   ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                   : "bg-indigo-600 hover:bg-indigo-700 text-white"
               }`}
             >
               <PenTool className="w-4 h-4" />
-              <span>{signatureWorker || signatureManager ? (lang === "ar" ? "✍️ التوقيع الرقمي (موقع)" : "✍️ Firme Inserite") : (lang === "ar" ? "✍️ التوقيع الرقمي" : "✍️ Firma PDF")}</span>
+              <span>{signatureWorker || signatureManager ? (lang === "ar" ? "✍️ التوقيع الرقمي (موقع)" : "✍️ Firme Inserite") : (lang === "ar" ? "✍️ توقيع التقرير" : "✍️ Firma PDF")}</span>
+            </button>
+
+            {/* Instant WhatsApp Send Button */}
+            <button
+              type="button"
+              onClick={handleSendWhatsAppReport}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all whitespace-nowrap cursor-pointer"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>{lang === "ar" ? "📲 إرسال الساعات للمدير عبر واتساب" : "📲 Invia Ore su WhatsApp"}</span>
             </button>
 
             <button
               onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-md transition-all whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-md transition-all whitespace-nowrap cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               <span>{t.btnPrint}</span>
@@ -348,7 +399,7 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, work
 
             <button
               onClick={handleExportCSV}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-md transition-all whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-md transition-all whitespace-nowrap cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4" />
               <span>{t.btnCsv}</span>
