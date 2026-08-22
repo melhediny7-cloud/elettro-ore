@@ -64,6 +64,107 @@ const headers = {
 const LOCAL_STORAGE_LOGS_KEY = "oralavoro_work_logs_v1";
 const LOCAL_STORAGE_WORKERS_KEY = "oralavoro_workers_v1";
 const LOCAL_STORAGE_CANTIERI_KEY = "oralavoro_cantieri_v1";
+const LOCAL_STORAGE_SYNC_QUEUE_KEY = "oralavoro_offline_sync_queue_v1";
+
+export interface OfflineQueueItem {
+  id: string;
+  action: "create" | "update" | "delete";
+  entity: "work_log" | "worker" | "work_site";
+  payload: any;
+  timestamp: number;
+}
+
+export function getOfflineQueue(): OfflineQueueItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_SYNC_QUEUE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function getPendingQueueCount(): number {
+  return getOfflineQueue().length;
+}
+
+export function addToOfflineQueue(item: Omit<OfflineQueueItem, "id" | "timestamp">) {
+  if (typeof window === "undefined") return;
+  const queue = getOfflineQueue();
+  const newItem: OfflineQueueItem = {
+    ...item,
+    id: `q-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    timestamp: Date.now(),
+  };
+  localStorage.setItem(LOCAL_STORAGE_SYNC_QUEUE_KEY, JSON.stringify([...queue, newItem]));
+  window.dispatchEvent(new CustomEvent("oralavoro_sync_queue_updated"));
+}
+
+export function removeFromOfflineQueue(id: string) {
+  if (typeof window === "undefined") return;
+  const queue = getOfflineQueue();
+  const updated = queue.filter((item) => item.id !== id);
+  localStorage.setItem(LOCAL_STORAGE_SYNC_QUEUE_KEY, JSON.stringify(updated));
+  window.dispatchEvent(new CustomEvent("oralavoro_sync_queue_updated"));
+}
+
+export async function syncOfflineQueue(): Promise<{ success: boolean; syncedCount: number }> {
+  if (typeof window === "undefined" || !navigator.onLine) {
+    return { success: false, syncedCount: 0 };
+  }
+  const queue = getOfflineQueue();
+  if (queue.length === 0) return { success: true, syncedCount: 0 };
+
+  let synced = 0;
+  for (const item of queue) {
+    try {
+      if (item.entity === "work_log") {
+        if (item.action === "create") {
+          const payload = mapAppLogToSupabase(item.payload);
+          const res = await fetch(`${SUPABASE_URL}/work_logs`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(payload),
+          });
+          if (res.ok) {
+            removeFromOfflineQueue(item.id);
+            synced++;
+          }
+        } else if (item.action === "update") {
+          const payload = mapAppLogToSupabase(item.payload);
+          const res = await fetch(`${SUPABASE_URL}/work_logs?id=eq.${item.payload.id}`, {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify(payload),
+          });
+          if (res.ok) {
+            removeFromOfflineQueue(item.id);
+            synced++;
+          }
+        } else if (item.action === "delete") {
+          const res = await fetch(`${SUPABASE_URL}/work_logs?id=eq.${item.payload.id}`, {
+            method: "DELETE",
+            headers,
+          });
+          if (res.ok) {
+            removeFromOfflineQueue(item.id);
+            synced++;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Error syncing queue item", item, e);
+    }
+  }
+
+  return { success: true, syncedCount: synced };
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => {
+    syncOfflineQueue().catch(console.error);
+  });
+}
 
 export const DEFAULT_WORKERS: WorkerProfile[] = [
   { id: 1, name: "Mario Rossi", hourlyRate: "15.00", role: "Caposquadra", phone: "+39 340 1234567", pin: "1111" },
@@ -473,21 +574,23 @@ export async function createWorkLog(log: Omit<WorkLogEntry, "id" | "createdAt" |
   const supabasePayload = mapAppLogToSupabase(log);
 
   try {
-    const res = await fetch(`${SUPABASE_URL}/work_logs`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(supabasePayload),
-    });
-    if (res.ok) {
-      const result = await res.json();
-      const created = Array.isArray(result) ? result[0] : result;
-      const mapped = mapSupabaseLogToApp(created);
-      const local = getLocalLogs();
-      saveLocalLogs([mapped, ...local.filter((l) => l.id !== mapped.id)]);
-      return mapped;
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      const res = await fetch(`${SUPABASE_URL}/work_logs`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(supabasePayload),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        const created = Array.isArray(result) ? result[0] : result;
+        const mapped = mapSupabaseLogToApp(created);
+        const local = getLocalLogs();
+        saveLocalLogs([mapped, ...local.filter((l) => l.id !== mapped.id)]);
+        return mapped;
+      }
     }
   } catch (e) {
-    console.warn("Supabase createWorkLog failed, saving locally", e);
+    console.warn("Supabase createWorkLog failed, saving locally and enqueuing", e);
   }
 
   const newLog: WorkLogEntry = {
@@ -498,6 +601,10 @@ export async function createWorkLog(log: Omit<WorkLogEntry, "id" | "createdAt" |
   };
   const local = getLocalLogs();
   saveLocalLogs([newLog, ...local]);
+  
+  // Add to offline sync queue
+  addToOfflineQueue({ action: "create", entity: "work_log", payload: newLog });
+  
   return newLog;
 }
 
@@ -507,45 +614,57 @@ export async function updateWorkLog(log: WorkLogEntry): Promise<WorkLogEntry> {
   const supabasePayload = mapAppLogToSupabase(log);
 
   try {
-    const res = await fetch(`${SUPABASE_URL}/work_logs?id=eq.${log.id}`, {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify(supabasePayload),
-    });
-    if (res.ok) {
-      const result = await res.json();
-      const updated = Array.isArray(result) && result[0] ? result[0] : log;
-      const mapped = mapSupabaseLogToApp(updated);
-      const local = getLocalLogs();
-      saveLocalLogs(local.map((item) => (item.id === mapped.id ? mapped : item)));
-      return mapped;
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      const res = await fetch(`${SUPABASE_URL}/work_logs?id=eq.${log.id}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(supabasePayload),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        const updated = Array.isArray(result) && result[0] ? result[0] : log;
+        const mapped = mapSupabaseLogToApp(updated);
+        const local = getLocalLogs();
+        saveLocalLogs(local.map((item) => (item.id === mapped.id ? mapped : item)));
+        return mapped;
+      }
     }
   } catch (e) {
-    console.warn("Supabase updateWorkLog failed, saving locally", e);
+    console.warn("Supabase updateWorkLog failed, saving locally and enqueuing", e);
   }
 
   const local = getLocalLogs();
   saveLocalLogs(local.map((item) => (item.id === log.id ? { ...log, updatedAt: new Date().toISOString() } : item)));
+  
+  // Add to offline sync queue
+  addToOfflineQueue({ action: "update", entity: "work_log", payload: log });
+  
   return log;
 }
 
 export async function deleteWorkLog(id: number): Promise<boolean> {
   try {
-    const res = await fetch(`${SUPABASE_URL}/work_logs?id=eq.${id}`, {
-      method: "DELETE",
-      headers,
-    });
-    if (res.ok) {
-      const local = getLocalLogs();
-      saveLocalLogs(local.filter((item) => item.id !== id));
-      return true;
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      const res = await fetch(`${SUPABASE_URL}/work_logs?id=eq.${id}`, {
+        method: "DELETE",
+        headers,
+      });
+      if (res.ok) {
+        const local = getLocalLogs();
+        saveLocalLogs(local.filter((item) => item.id !== id));
+        return true;
+      }
     }
   } catch (e) {
-    console.warn("Supabase deleteWorkLog failed, saving locally", e);
+    console.warn("Supabase deleteWorkLog failed, saving locally and enqueuing", e);
   }
 
   const local = getLocalLogs();
   saveLocalLogs(local.filter((item) => item.id !== id));
+  
+  // Add to offline sync queue
+  addToOfflineQueue({ action: "delete", entity: "work_log", payload: { id } });
+  
   return true;
 }
 

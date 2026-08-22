@@ -365,11 +365,16 @@ _تنبيه تلقائي من نظام ElettroOre_`;
         navigator.vibrate([40, 60, 40]);
       }
 
+      const isOfflineMode = typeof navigator !== "undefined" && !navigator.onLine;
       setStatusMessage({
         type: "success",
-        text: lang === "ar"
-          ? `✅ تم تسجيل الحضور بنجاح لـ ${activeWorkerName} الساعة ${timeHHMM}`
-          : `Timbratura di Entrata registrata per ${activeWorkerName} alle ore ${timeHHMM}`,
+        text: isOfflineMode
+          ? (lang === "ar"
+              ? `✅ تم تسجيل الحضور (وضع الأوفلاين تحت الأرض 🚇 محفوظ في هاتفك) لـ ${activeWorkerName} الساعة ${timeHHMM}. سيتم رفعه تلقائياً فور عودة الإنترنت.`
+              : `✅ Timbratura di Entrata registrata (Modalità Offline Sotterraneo 🚇 - Salvato in locale) per ${activeWorkerName} alle ${timeHHMM}.`)
+          : (lang === "ar"
+              ? `✅ تم تسجيل الحضور بنجاح لـ ${activeWorkerName} الساعة ${timeHHMM}`
+              : `Timbratura di Entrata registrata per ${activeWorkerName} alle ore ${timeHHMM}`),
       });
       onRefresh();
     } catch (e: any) {
@@ -406,9 +411,16 @@ _تنبيه تلقائي من نظام ElettroOre_`;
         navigator.vibrate([60, 80, 60]);
       }
 
+      const isOfflineMode = typeof navigator !== "undefined" && !navigator.onLine;
       setStatusMessage({
         type: "success",
-        text: `Timbratura di Uscita registrata alle ore ${timeHHMM}. Giornata completata (${netHours} ore)!`,
+        text: isOfflineMode
+          ? (lang === "ar"
+              ? `✅ تم تسجيل الانصراف (وضع الأوفلاين تحت الأرض 🚇 محفوظ في هاتفك) الساعة ${timeHHMM} (${netHours} ساعة). جاهز للمزامنة فور عودة الشبكة!`
+              : `✅ Timbratura di Uscita registrata (Modalità Offline Sotterraneo 🚇) alle ${timeHHMM} (${netHours} ore).`)
+          : (lang === "ar"
+              ? `✅ تم تسجيل الانصراف بنجاح الساعة ${timeHHMM}. إجمالي اليوم: ${netHours} ساعة.`
+              : `Timbratura di Uscita registrata alle ore ${timeHHMM}. Giornata completata (${netHours} ore)!`),
       });
       onRefresh();
     } catch (e: any) {

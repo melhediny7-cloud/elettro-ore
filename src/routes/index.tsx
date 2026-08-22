@@ -9,7 +9,7 @@ import { CantieriManagerView } from "../components/CantieriManagerView";
 import { DailyLogManager } from "../components/DailyLogManager";
 import { MonthlyReportView } from "../components/MonthlyReportView";
 import { SettingsView } from "../components/SettingsView";
-import { WorkLogEntry, WorkerProfile, WorkSite, fetchWorkLogs, fetchWorkers, fetchWorkSites, fetchAppSettings } from "../utils/api";
+import { WorkLogEntry, WorkerProfile, WorkSite, fetchWorkLogs, fetchWorkers, fetchWorkSites, fetchAppSettings, syncOfflineQueue } from "../utils/api";
 import { Language, translations } from "../utils/i18n";
 
 export const Route = createFileRoute("/")({
@@ -166,6 +166,21 @@ function AppHome() {
     refreshWorkers();
     refreshCantieri();
     refreshLogs();
+    
+    if (typeof window !== "undefined") {
+      syncOfflineQueue().then(() => refreshLogs()).catch(console.error);
+
+      const handleOnline = () => {
+        syncOfflineQueue().then(() => {
+          refreshLogs();
+          refreshWorkers();
+          refreshCantieri();
+        }).catch(console.error);
+      };
+
+      window.addEventListener("online", handleOnline);
+      return () => window.removeEventListener("online", handleOnline);
+    }
   }, [refreshWorkers, refreshCantieri, refreshLogs]);
 
   const t = translations[lang];

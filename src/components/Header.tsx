@@ -1,8 +1,8 @@
-import React, { useState } from "react";
-import { Clock, Calendar, FileText, Settings, MapPin, Globe, Shield, ShieldCheck, Users, Lock, Unlock, User, LogOut, HardHat } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Clock, Calendar, FileText, Settings, MapPin, Globe, Shield, ShieldCheck, Users, Lock, Unlock, User, LogOut, HardHat, Wifi, WifiOff, RotateCw } from "lucide-react";
 import { formatDateIT, getCurrentDateISO } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
-import { WorkerProfile, verifyAdminPin } from "../utils/api";
+import { WorkerProfile, verifyAdminPin, getPendingQueueCount, syncOfflineQueue } from "../utils/api";
 
 interface HeaderProps {
   activeTab: "timbratrice" | "lavoratori" | "cantieri" | "registro" | "report" | "impostazioni";
@@ -37,6 +37,50 @@ export const Header: React.FC<HeaderProps> = ({
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState(false);
+
+  // Live Network & Offline Sync State
+  const [isOnline, setIsOnline] = useState<boolean>(
+    typeof navigator !== "undefined" ? navigator.onLine : true
+  );
+  const [pendingCount, setPendingCount] = useState<number>(() => getPendingQueueCount());
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleOnline = () => {
+      setIsOnline(true);
+      handleManualSync();
+    };
+    const handleOffline = () => setIsOnline(false);
+    const handleQueueUpdate = () => setPendingCount(getPendingQueueCount());
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("oralavoro_sync_queue_updated", handleQueueUpdate);
+
+    const interval = setInterval(() => {
+      setIsOnline(navigator.onLine);
+      setPendingCount(getPendingQueueCount());
+    }, 5000);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("oralavoro_sync_queue_updated", handleQueueUpdate);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const handleManualSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      await syncOfflineQueue();
+      setPendingCount(getPendingQueueCount());
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleRoleToggle = () => {
     if (userRole === "admin") {
@@ -221,6 +265,43 @@ export const Header: React.FC<HeaderProps> = ({
                 </>
               )}
             </button>
+
+            {/* Network & Offline Sync Status Pill */}
+            <div className="flex items-center">
+              {!isOnline ? (
+                <div
+                  title={lang === "ar" ? "وضع الأوفلاين تحت الأرض: البيانات تحفظ في الهاتف مؤقتاً" : "Offline sotto terra: i dati sono salvati sul telefono"}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
+                >
+                  <WifiOff className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                  <span>{lang === "ar" ? "أوفلاين تحت الأرض 🚇" : "Offline Sotterraneo 🚇"}</span>
+                  {pendingCount > 0 && (
+                    <span className="px-1.5 py-0.2 bg-amber-400 text-slate-950 font-black rounded-md text-[10px]">
+                      {pendingCount}
+                    </span>
+                  )}
+                </div>
+              ) : pendingCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={handleManualSync}
+                  disabled={isSyncing}
+                  title={lang === "ar" ? "اضغط للمزامنة الفورية مع السحابة" : "Clicca per sincronizzare subito con il cloud"}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40 hover:bg-blue-500/30 transition-all cursor-pointer"
+                >
+                  <RotateCw className={`w-3.5 h-3.5 text-blue-400 ${isSyncing ? "animate-spin" : ""}`} />
+                  <span>{isSyncing ? (lang === "ar" ? "جاري الرفع..." : "Sincronizzazione...") : `${pendingCount} ${lang === "ar" ? "معلق للرفع" : "in attesa"}`}</span>
+                </button>
+              ) : (
+                <div
+                  title={lang === "ar" ? "متصل بالسحابة" : "Connesso al cloud"}
+                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30"
+                >
+                  <Wifi className="w-3 h-3 text-emerald-400" />
+                  <span className="hidden sm:inline">{lang === "ar" ? "سحابي متصل" : "Online"}</span>
+                </div>
+              )}
+            </div>
 
             {/* Today's Date */}
             <div className="hidden sm:block bg-slate-800/90 border border-slate-700/80 px-3 py-1.5 rounded-lg text-slate-200 text-xs">
