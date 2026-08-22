@@ -118,7 +118,7 @@ export async function fetchWorkers(): Promise<WorkerProfile[]> {
     const res = await fetch(`${SUPABASE_URL}/workers?select=*&order=name.asc`, { headers });
     if (res.ok) {
       const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         const mapped: WorkerProfile[] = data.map((w: any) => ({
           id: w.id,
           name: w.name,
@@ -129,12 +129,6 @@ export async function fetchWorkers(): Promise<WorkerProfile[]> {
         }));
         saveLocalWorkers(mapped);
         return mapped;
-      } else if (Array.isArray(data) && data.length === 0) {
-        // Seed default workers to Supabase if table is empty
-        for (const dw of DEFAULT_WORKERS) {
-          await createWorker({ name: dw.name, hourlyRate: dw.hourlyRate, role: dw.role, phone: dw.phone });
-        }
-        return fetchWorkers();
       }
     }
   } catch (e) {
@@ -428,7 +422,7 @@ export async function deleteWorkLog(id: number): Promise<boolean> {
 
 export async function clearAllWorkLogs(): Promise<boolean> {
   try {
-    await fetch(`${SUPABASE_URL}/work_logs?id=gt.0`, {
+    await fetch(`${SUPABASE_URL}/work_logs?id=neq.0`, {
       method: "DELETE",
       headers,
     });
@@ -437,6 +431,20 @@ export async function clearAllWorkLogs(): Promise<boolean> {
   }
 
   saveLocalLogs([]);
+  return true;
+}
+
+export async function clearAllWorkers(): Promise<boolean> {
+  try {
+    await fetch(`${SUPABASE_URL}/workers?id=neq.0`, {
+      method: "DELETE",
+      headers,
+    });
+  } catch (e) {
+    console.warn("Failed to clear Supabase workers", e);
+  }
+
+  saveLocalWorkers([]);
   return true;
 }
 

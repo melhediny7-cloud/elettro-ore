@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Building2, MapPin, Database, RefreshCw, Check, Trash2, ShieldCheck, Lock, Shield, KeyRound, AlertCircle } from "lucide-react";
-import { seedSampleData, clearAllWorkLogs, changeAdminPin } from "../utils/api";
+import { seedSampleData, clearAllWorkLogs, clearAllWorkers, changeAdminPin } from "../utils/api";
 import { translations, Language } from "../utils/i18n";
 
 interface SettingsViewProps {
@@ -110,6 +110,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       setLoadingClear(true);
       try {
         await clearAllWorkLogs();
+        await clearAllWorkers();
         await onRefresh();
         alert(t.clearSuccess);
       } catch (e) {
