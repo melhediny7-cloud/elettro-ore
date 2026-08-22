@@ -79,6 +79,10 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
       isClockedIn: 0,
     });
     setIsModalOpen(true);
+
+    if (userRole === "worker") {
+      setTimeout(() => handleDetectGPSInModal(), 200);
+    }
   };
 
   const openEditModal = (log: WorkLogEntry) => {
@@ -121,7 +125,10 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
   };
 
   const handleDetectGPSInModal = () => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      alert(lang === "ar" ? "المتصفح لا يدعم تحديد الموقع GPS" : "Geolocalizzazione non supportata");
+      return;
+    }
     setGeoLoading(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
@@ -131,16 +138,36 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
           ...prev,
           latitude: String(latitude),
           longitude: String(longitude),
-          address: addr,
+          address: addr || `Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}`,
         }));
         setGeoLoading(false);
       },
-      () => setGeoLoading(false)
+      (err) => {
+        setGeoLoading(false);
+        console.warn("Geolocation error", err);
+        alert(
+          lang === "ar"
+            ? "⚠️ يرجى السماح للتطبيق بالوصول إلى موقعك GPS من إعدادات المتصفح."
+            : "⚠️ Attiva i permessi GPS del browser per rilevare la tua posizione."
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // STRICT GPS REQUIREMENT FOR WORKERS
+    if (userRole === "worker" && (!formData.latitude || !formData.longitude)) {
+      alert(
+        lang === "ar"
+          ? "⚠️ تنبيه أمني: لا يمكن تسجيل الساعات إلا بتحديد موقعك الجغرافي الفعلي (GPS). يرجى الضغط على زر (Rileva Posizione GPS) أولاً!"
+          : "⚠️ Posizione GPS Obbligatoria: Devi rilevare la tua posizione GPS attuale per registrare le ore di lavoro!"
+      );
+      return;
+    }
+
     setLoading(true);
 
     const netHours = calculateNetHours(formData.startTime, formData.endTime || "", formData.breakMinutes);
@@ -149,7 +176,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
 
     const payload = {
       ...formData,
-      workerName: formData.workerName || "Mario Rossi",
+      workerName: formData.workerName || selectedWorker?.name || "Mario Rossi",
       totalHours: netHours,
       hourlyRate: rateToUse,
       totalPay: totalPay,
@@ -601,20 +628,34 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
                       <span className="text-slate-500 font-medium block">Ore Nette: <strong className="text-slate-900">{liveNetHours} h</strong></span>
                       <span className="text-slate-500 font-medium block">Sconto Pausa: {formData.breakMinutes}m</span>
                     </div>
-                    <div className="text-right">
-                      <span className="text-xs text-emerald-600 font-bold block">{liveRate} €/h</span>
-                      <span className="text-base font-black text-emerald-800 block">€ {liveTotalPay}</span>
-                    </div>
+                    {userRole === "admin" && (
+                      <div className="text-right">
+                        <span className="text-xs text-emerald-600 font-bold block">{liveRate} €/h</span>
+                        <span className="text-base font-black text-emerald-800 block">€ {liveTotalPay}</span>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
 
-              {/* Location Name & GPS */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-                  {t.locationLabel}
-                </label>
-                <div className="flex gap-2 mb-2">
+              {/* Location Name & Mandatory GPS */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                    {t.locationLabel} {userRole === "worker" ? "(Posizione GPS Obbligatoria *)" : ""}
+                  </label>
+                  {formData.latitude ? (
+                    <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> GPS Verificato
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-bold text-amber-600">
+                      GPS Non Rilevato
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
                   <select
                     value={formData.locationName}
                     onChange={(e) => setFormData({ ...formData, locationName: e.target.value })}
@@ -631,20 +672,30 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
                     type="button"
                     onClick={handleDetectGPSInModal}
                     disabled={geoLoading}
-                    className="px-3 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold flex items-center gap-1.5"
+                    className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                      formData.latitude
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "bg-blue-600 hover:bg-blue-700 text-white animate-pulse"
+                    }`}
                   >
                     {geoLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Navigation className="w-3.5 h-3.5" />}
-                    <span>GPS</span>
+                    <span>{formData.latitude ? "Aggiorna GPS 📍" : "Rileva GPS 📍"}</span>
                   </button>
                 </div>
 
                 <input
                   type="text"
-                  placeholder="Indirizzo specifico o dettagli..."
+                  placeholder="Indirizzo o dettagli cantiere..."
                   value={formData.address || ""}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                   className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+
+                {userRole === "worker" && !formData.latitude && (
+                  <p className="text-[11px] text-amber-600 font-semibold bg-amber-50 p-2 rounded-lg border border-amber-200">
+                    ⚠️ {lang === "ar" ? "يجب الضغط على زر (Rileva GPS) للتحقق من أنك في موقع العمل قبل الحفظ." : "Devi premere 'Rileva GPS' per verificare la presenza in cantiere prima di salvare."}
+                  </p>
+                )}
               </div>
 
               {/* Notes */}
