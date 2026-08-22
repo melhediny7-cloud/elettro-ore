@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Play, Square, MapPin, Navigation, Clock, CheckCircle2, AlertCircle, RefreshCw, User, ChevronDown, ShieldAlert, MessageSquare, Phone, Send, Share2 } from "lucide-react";
+import { Play, Square, MapPin, Navigation, Clock, CheckCircle2, AlertCircle, RefreshCw, User, ChevronDown, ShieldAlert, MessageSquare, Phone, Send, Share2, X } from "lucide-react";
 import { WorkLogEntry, WorkerProfile, createWorkLog, updateWorkLog, calculateNetHours, calculateTotalPay } from "../utils/api";
 import { getCurrentDateISO, getCurrentTimeHHMM, PRESET_LOCATIONS_IT, WORK_TYPES_IT, reverseGeocode, parseWorkplaceZone, verifyWorkerGeofence } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
@@ -73,6 +73,14 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
   // Real-time Geofence monitoring
   const [isOutOfGeofence, setIsOutOfGeofence] = useState(false);
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
+  const [whatsAppPromptData, setWhatsAppPromptData] = useState<{
+    title: string;
+    workerName: string;
+    timeStr: string;
+    dateStr: string;
+    locationStr: string;
+    url: string;
+  } | null>(null);
 
   const activeWorkerName = selectedWorker?.name || "Mario Rossi";
   const activeWorkerRate = selectedWorker?.hourlyRate || "15.00";
@@ -280,6 +288,32 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
         navigator.vibrate([40, 60, 40]);
       }
 
+      const managerPhone = typeof window !== "undefined" ? localStorage.getItem("oralavoro_managerPhone") || "" : "";
+      const cleanPhone = managerPhone.replace(/[^0-9]/g, "");
+      const dateStr = now.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
+      const locationStr = activeAddress || selectedLocation || workplaceZone.name;
+      const gpsCoords = activeCoords ? `${activeCoords.lat},${activeCoords.lng}` : `${workplaceZone.lat},${workplaceZone.lng}`;
+      const msg = `📌 *NOTIFICA ELETTRO-ORE*
+🟢 TIMBRATURA ENTRATA (Inizio Turno)
+
+👷 *Lavoratore:* ${activeWorkerName}
+⏰ *Orario:* ${timeHHMM}
+📅 *Data:* ${dateStr}
+📍 *Cantiere:* ${workplaceZone.name}
+🗺️ *Indirizzo GPS:* ${locationStr}
+🌐 *Mappa Google:* https://www.google.com/maps?q=${gpsCoords}
+
+_Inviato da ElettroOre Italia_`;
+      const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
+      setWhatsAppPromptData({
+        title: "🟢 تسجيل الدخول (TIMBRATURA ENTRATA)",
+        workerName: activeWorkerName,
+        timeStr: timeHHMM,
+        dateStr,
+        locationStr,
+        url: waUrl,
+      });
+
       setStatusMessage({
         type: "success",
         text: lang === "ar"
@@ -320,6 +354,32 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
       if (typeof navigator !== "undefined" && navigator.vibrate) {
         navigator.vibrate([60, 80, 60]);
       }
+
+      const managerPhone = typeof window !== "undefined" ? localStorage.getItem("oralavoro_managerPhone") || "" : "";
+      const cleanPhone = managerPhone.replace(/[^0-9]/g, "");
+      const dateStr = now.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
+      const locationStr = currentActiveLog.address || currentActiveLog.locationName || workplaceZone.name;
+      const gpsCoords = currentActiveLog.latitude && currentActiveLog.longitude ? `${currentActiveLog.latitude},${currentActiveLog.longitude}` : `${workplaceZone.lat},${workplaceZone.lng}`;
+      const msg = `📌 *NOTIFICA ELETTRO-ORE*
+🔴 TIMBRATURA USCITA (Fine Turno)
+
+👷 *Lavoratore:* ${activeWorkerName}
+⏰ *Orario:* ${timeHHMM} (Totale: ${netHours} ore)
+📅 *Data:* ${dateStr}
+📍 *Cantiere:* ${workplaceZone.name}
+🗺️ *Indirizzo GPS:* ${locationStr}
+🌐 *Mappa Google:* https://www.google.com/maps?q=${gpsCoords}
+
+_Inviato da ElettroOre Italia_`;
+      const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
+      setWhatsAppPromptData({
+        title: "🔴 تسجيل الخروج (TIMBRATURA USCITA)",
+        workerName: activeWorkerName,
+        timeStr: `${timeHHMM} (${netHours} ore)`,
+        dateStr,
+        locationStr,
+        url: waUrl,
+      });
 
       setStatusMessage({
         type: "success",
@@ -748,6 +808,62 @@ _Inviato da ElettroOre Italia_`;
               >
                 <Send className="w-3.5 h-3.5 text-emerald-400" />
                 <span>{lang === "ar" ? "إشعار الخروج 💬" : "Notifica Uscita 💬"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WhatsApp Instant Notification Modal */}
+      {whatsAppPromptData && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 print:hidden animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">
+                    {lang === "ar" ? "إشعار الواتساب الفوري للمدير" : "Notifica WhatsApp al Manager"}
+                  </h3>
+                  <span className="text-xs text-slate-500 font-medium">
+                    {lang === "ar" ? "تم تسجيل الختم بنجاح في النظام" : "Timbratura salvata con successo"}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setWhatsAppPromptData(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs font-mono text-slate-700 space-y-1.5 leading-relaxed">
+              <p className="font-bold text-emerald-800 text-sm">{whatsAppPromptData.title}</p>
+              <p>👷 <b>{whatsAppPromptData.workerName}</b></p>
+              <p>⏰ {whatsAppPromptData.timeStr} | 📅 {whatsAppPromptData.dateStr}</p>
+              <p>📍 {whatsAppPromptData.locationStr}</p>
+              <p className="text-[11px] text-blue-600">🌐 مع رابط مباشر لخرائط جوجل GPS</p>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                onClick={() => {
+                  window.open(whatsAppPromptData.url, "_blank");
+                  setWhatsAppPromptData(null);
+                }}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>{lang === "ar" ? "فتح واتساب وإرسال الإشعار الآن 📲" : "Apri WhatsApp e Invia 📲"}</span>
+              </button>
+              <button
+                onClick={() => setWhatsAppPromptData(null)}
+                className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition-all cursor-pointer"
+              >
+                {lang === "ar" ? "إغلاق والتخطي" : "Chiudi e Salta"}
               </button>
             </div>
           </div>

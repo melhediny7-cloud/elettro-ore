@@ -34,6 +34,7 @@ export interface AppSettings {
   companyName: string;
   defaultLocation: string;
   adminPin: string;
+  managerPhone?: string;
 }
 
 const SUPABASE_URL = "https://kniadyyibpwszuwsslcn.supabase.co/rest/v1";
@@ -585,11 +586,20 @@ export async function fetchAppSettings(): Promise<AppSettings> {
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data[0]) {
+        let rawCompany = data[0].company_name || "Power";
+        let compName = rawCompany;
+        let phone = "";
+        if (rawCompany.includes(" | ")) {
+          const parts = rawCompany.split(" | ");
+          compName = parts[0] || "Power";
+          phone = parts[1] || "";
+        }
         return {
           id: data[0].id,
-          companyName: data[0].company_name || "Azienda s.r.l.",
+          companyName: compName,
           defaultLocation: data[0].default_location || "Ufficio Sede - Milano",
           adminPin: data[0].admin_pin || "1234",
+          managerPhone: phone || (typeof window !== "undefined" ? localStorage.getItem("oralavoro_managerPhone") || "" : ""),
         };
       } else if (Array.isArray(data) && data.length === 0) {
         // Auto-create general row
@@ -598,7 +608,7 @@ export async function fetchAppSettings(): Promise<AppSettings> {
           headers,
           body: JSON.stringify({
             id: "general",
-            company_name: "Azienda s.r.l.",
+            company_name: "Power",
             default_location: "Ufficio Sede - Milano",
             admin_pin: "1234",
           }),
@@ -611,16 +621,21 @@ export async function fetchAppSettings(): Promise<AppSettings> {
 
   return {
     id: "general",
-    companyName: typeof window !== "undefined" ? localStorage.getItem("oralavoro_company_name") || "Azienda s.r.l." : "Azienda s.r.l.",
+    companyName: typeof window !== "undefined" ? localStorage.getItem("oralavoro_company_name") || "Power" : "Power",
     defaultLocation: typeof window !== "undefined" ? localStorage.getItem("oralavoro_default_location") || "Ufficio Sede - Milano" : "Ufficio Sede - Milano",
     adminPin: typeof window !== "undefined" ? localStorage.getItem("oralavoro_admin_pin") || "1234" : "1234",
+    managerPhone: typeof window !== "undefined" ? localStorage.getItem("oralavoro_managerPhone") || "" : "",
   };
 }
 
 export async function updateAppSettings(settings: Partial<AppSettings>): Promise<boolean> {
   try {
     const payload: any = { id: "general" };
-    if (settings.companyName !== undefined) payload.company_name = settings.companyName;
+    if (settings.companyName !== undefined || settings.managerPhone !== undefined) {
+      const cName = settings.companyName || (typeof window !== "undefined" ? localStorage.getItem("oralavoro_companyName") || "Power" : "Power");
+      const phone = settings.managerPhone !== undefined ? settings.managerPhone : (typeof window !== "undefined" ? localStorage.getItem("oralavoro_managerPhone") || "" : "");
+      payload.company_name = phone ? `${cName} | ${phone}` : cName;
+    }
     if (settings.defaultLocation !== undefined) payload.default_location = settings.defaultLocation;
     if (settings.adminPin !== undefined) payload.admin_pin = settings.adminPin;
 

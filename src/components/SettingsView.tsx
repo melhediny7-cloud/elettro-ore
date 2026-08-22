@@ -584,7 +584,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <Phone className="w-4 h-4 text-emerald-600" />
               <span>{lang === "ar" ? "رقم هاتف المدير (مع كود الدولة):" : "Numero WhatsApp Titolare (con prefisso):"}</span>
             </label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap sm:flex-nowrap">
               <input
                 type="text"
                 value={managerPhone}
@@ -594,22 +594,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               />
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (typeof window !== "undefined") {
                     localStorage.setItem("oralavoro_managerPhone", managerPhone);
                   }
+                  await updateAppSettings({ managerPhone, companyName });
                   setWhatsappSaved(true);
                   setTimeout(() => setWhatsappSaved(false), 3000);
                 }}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <Check className="w-4 h-4" />
-                <span>{lang === "ar" ? "حفظ الرقم" : "Salva Numero"}</span>
+                <span>{lang === "ar" ? "حفظ على السحابة" : "Salva Numero"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const cleanPhone = managerPhone.replace(/[^0-9]/g, "");
+                  const msg = encodeURIComponent(`🧪 *TEST NOTIFICA ELETTRO-ORE*\n✅ Il numero WhatsApp del Manager è configurato e funzionante con successo!`);
+                  window.open(`https://api.whatsapp.com/send?phone=${cleanPhone}&text=${msg}`, "_blank");
+                }}
+                className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5 text-emerald-400" />
+                <span>{lang === "ar" ? "تجربة الإرسال 💬" : "Test Invio 💬"}</span>
               </button>
             </div>
             {whatsappSaved && (
               <span className="text-xs font-bold text-emerald-600 flex items-center gap-1 mt-1">
-                <Check className="w-3.5 h-3.5" /> {lang === "ar" ? "تم حفظ رقم المدير بنجاح!" : "Numero salvato con successo!"}
+                <Check className="w-3.5 h-3.5" /> {lang === "ar" ? "تم حفظ رقم المدير وتزامنه على كافة هواتف العمال بنجاح!" : "Numero sincronizzato con successo su tutti i dispositivi!"}
               </span>
             )}
           </div>
