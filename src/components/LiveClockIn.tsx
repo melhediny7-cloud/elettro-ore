@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Play, Square, MapPin, Navigation, Clock, CheckCircle2, AlertCircle, RefreshCw, User, ChevronDown, ShieldAlert, MessageSquare, Phone, Send, Share2, X } from "lucide-react";
 import { WorkLogEntry, WorkerProfile, createWorkLog, updateWorkLog, calculateNetHours, calculateTotalPay } from "../utils/api";
 import { getCurrentDateISO, getCurrentTimeHHMM, PRESET_LOCATIONS_IT, WORK_TYPES_IT, reverseGeocode, parseWorkplaceZone, verifyWorkerGeofence } from "../utils/italian";
@@ -105,6 +105,8 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
     }
   }, [defaultLocation]);
 
+  const lastAlertedBreachTimeRef = useRef<number>(0);
+
   // Real-time Geofence watcher when clocked-in
   useEffect(() => {
     if (!currentActiveLog || typeof navigator === "undefined" || !navigator.geolocation) {
@@ -121,6 +123,48 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
         playGeofenceAlarmSound();
         if (navigator.vibrate) {
           navigator.vibrate([400, 200, 400, 200, 800]);
+        }
+
+        // Auto-send WhatsApp alert ONLY when worker leaves workplace during shift!
+        const nowMs = Date.now();
+        if (nowMs - lastAlertedBreachTimeRef.current > 180000) {
+          lastAlertedBreachTimeRef.current = nowMs;
+          const managerPhone = typeof window !== "undefined" ? localStorage.getItem("oralavoro_managerPhone") || "" : "";
+          const cleanPhone = managerPhone.replace(/[^0-9]/g, "");
+          const timeHHMM = `${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`;
+          const dateStr = new Date().toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
+          
+          const alertMsg = `🚨 *إنذار عاجل: خروج عامل من موقع العمل!*
+━━━━━━━━━━━━━━━━━━━━━
+👤 *اسم العامل / LAVORATORE:*
+👉 *${activeWorkerName}* 👈
+━━━━━━━━━━━━━━━━━━━━━
+⚠️ *الحالة:* غادر نطاق العمل أثناء ساعات الدوام الرسمية!
+📏 *المسافة الحالية عن الورشة:* ${res.distanceKm} كم (الحد المسموح: ${workplaceZone.radiusKm || 3.0} كم)
+📍 *موقع الورشة المطلوب:* ${workplaceZone.name}
+⏰ *الوقت:* ${timeHHMM}
+📅 *التاريخ:* ${dateStr}
+🌐 *موقع العامل الفعلي الحالي على الخريطة (GPS):*
+https://www.google.com/maps?q=${latitude},${longitude}
+━━━━━━━━━━━━━━━━━━━━━
+_تنبيه تلقائي من نظام ElettroOre_`;
+
+          const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(alertMsg)}`;
+          
+          setWhatsAppPromptData({
+            title: "🚨 إنذار عاجل: خروج من موقع العمل!",
+            workerName: activeWorkerName,
+            timeStr: timeHHMM,
+            dateStr,
+            locationStr: `خارج النطاق (${res.distanceKm} كم عن الورشة)`,
+            url: waUrl,
+          });
+
+          try {
+            window.open(waUrl, "_blank");
+          } catch {
+            // Popup fallback
+          }
         }
       } else {
         setIsOutOfGeofence(false);
@@ -288,35 +332,6 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
         navigator.vibrate([40, 60, 40]);
       }
 
-      const managerPhone = typeof window !== "undefined" ? localStorage.getItem("oralavoro_managerPhone") || "" : "";
-      const cleanPhone = managerPhone.replace(/[^0-9]/g, "");
-      const dateStr = now.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
-      const locationStr = activeAddress || selectedLocation || workplaceZone.name;
-      const gpsCoords = activeCoords ? `${activeCoords.lat},${activeCoords.lng}` : `${workplaceZone.lat},${workplaceZone.lng}`;
-      const msg = `🚨 *NOTIFICA ELETTRO-ORE / إشعار حضور*
-━━━━━━━━━━━━━━━━━━━━━
-👤 *اسم العامل / LAVORATORE:*
-👉 *${activeWorkerName}* 👈
-━━━━━━━━━━━━━━━━━━━━━
-🟢 *العملية / STATO:* تسجيل دخول (TIMBRATURA ENTRATA)
-⏰ *الساعة / ORARIO:* ${timeHHMM}
-📅 *التاريخ / DATA:* ${dateStr}
-📍 *موقع العمل / CANTIERE:* ${workplaceZone.name}
-🗺️ *العنوان الدقيق / INDIRIZZO:* ${locationStr}
-🌐 *رابط الموقع الجغرافي (GPS MAP):*
-https://www.google.com/maps?q=${gpsCoords}
-━━━━━━━━━━━━━━━━━━━━━
-_تم الإرسال تلقائياً من تطبيق ElettroOre Italia_`;
-      const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
-      setWhatsAppPromptData({
-        title: "🟢 تسجيل الدخول (TIMBRATURA ENTRATA)",
-        workerName: activeWorkerName,
-        timeStr: timeHHMM,
-        dateStr,
-        locationStr,
-        url: waUrl,
-      });
-
       setStatusMessage({
         type: "success",
         text: lang === "ar"
@@ -357,35 +372,6 @@ _تم الإرسال تلقائياً من تطبيق ElettroOre Italia_`;
       if (typeof navigator !== "undefined" && navigator.vibrate) {
         navigator.vibrate([60, 80, 60]);
       }
-
-      const managerPhone = typeof window !== "undefined" ? localStorage.getItem("oralavoro_managerPhone") || "" : "";
-      const cleanPhone = managerPhone.replace(/[^0-9]/g, "");
-      const dateStr = now.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
-      const locationStr = currentActiveLog.address || currentActiveLog.locationName || workplaceZone.name;
-      const gpsCoords = currentActiveLog.latitude && currentActiveLog.longitude ? `${currentActiveLog.latitude},${currentActiveLog.longitude}` : `${workplaceZone.lat},${workplaceZone.lng}`;
-      const msg = `🚨 *NOTIFICA ELETTRO-ORE / إشعار انصراف*
-━━━━━━━━━━━━━━━━━━━━━
-👤 *اسم العامل / LAVORATORE:*
-👉 *${activeWorkerName}* 👈
-━━━━━━━━━━━━━━━━━━━━━
-🔴 *العملية / STATO:* تسجيل خروج (TIMBRATURA USCITA)
-⏰ *الساعة / ORARIO:* ${timeHHMM} (إجمالي الساعات: ${netHours} ore)
-📅 *التاريخ / DATA:* ${dateStr}
-📍 *موقع العمل / CANTIERE:* ${workplaceZone.name}
-🗺️ *العنوان الدقيق / INDIRIZZO:* ${locationStr}
-🌐 *رابط الموقع الجغرافي (GPS MAP):*
-https://www.google.com/maps?q=${gpsCoords}
-━━━━━━━━━━━━━━━━━━━━━
-_تم الإرسال تلقائياً من تطبيق ElettroOre Italia_`;
-      const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
-      setWhatsAppPromptData({
-        title: "🔴 تسجيل الخروج (TIMBRATURA USCITA)",
-        workerName: activeWorkerName,
-        timeStr: `${timeHHMM} (${netHours} ore)`,
-        dateStr,
-        locationStr,
-        url: waUrl,
-      });
 
       setStatusMessage({
         type: "success",
@@ -798,32 +784,6 @@ _تم الإرسال تلقائياً من تطبيق ElettroOre Italia_`;
             )}
             <span>TIMBRA USCITA</span>
           </button>
-
-          {/* Quick WhatsApp Report to Manager */}
-          <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <span className="text-xs text-slate-500 font-medium">
-              {lang === "ar" ? "📱 إشعار المدير بتسجيل الدخول / الخروج:" : "📱 Notifica istantanea per il Titolare:"}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => sendWhatsAppReport("entrata")}
-                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <MessageSquare className="w-3.5 h-3.5" />
-                <span>{lang === "ar" ? "إشعار الدخول 💬" : "Notifica Entrata 💬"}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => sendWhatsAppReport("uscita")}
-                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <Send className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{lang === "ar" ? "إشعار الخروج 💬" : "Notifica Uscita 💬"}</span>
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
