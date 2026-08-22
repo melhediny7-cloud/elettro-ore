@@ -148,6 +148,7 @@ function AppHome() {
                 onRefresh={refreshLogs}
                 defaultLocation={defaultLocation}
                 lang={lang}
+                userRole={userRole}
               />
             )}
 
@@ -167,9 +168,11 @@ function AppHome() {
               <DailyLogManager
                 logs={logs}
                 workers={workers}
+                selectedWorker={selectedWorker}
                 onRefresh={refreshLogs}
                 defaultLocation={defaultLocation}
                 lang={lang}
+                userRole={userRole}
               />
             )}
 

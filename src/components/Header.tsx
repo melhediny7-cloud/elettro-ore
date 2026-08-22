@@ -165,7 +165,7 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   {workers.map((w) => (
                     <option key={w.id} value={w.id} className="bg-slate-900 text-white">
-                      {w.name} ({w.hourlyRate}€/h)
+                      {w.name} {userRole === "admin" ? `(${w.hourlyRate}€/h)` : ""}
                     </option>
                   ))}
                 </select>

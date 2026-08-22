@@ -12,6 +12,7 @@ interface LiveClockInProps {
   onRefresh: () => void;
   defaultLocation: string;
   lang: Language;
+  userRole?: "worker" | "admin";
 }
 
 export const LiveClockIn: React.FC<LiveClockInProps> = ({
@@ -22,6 +23,7 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
   onRefresh,
   defaultLocation,
   lang,
+  userRole = "worker",
 }) => {
   const t = translations[lang];
   const [now, setNow] = useState(new Date());
@@ -280,7 +282,7 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
             >
               {workers.map((w) => (
                 <option key={w.id} value={w.id}>
-                  {w.name} ({w.hourlyRate} €/h)
+                  {w.name} {userRole === "admin" ? `(${w.hourlyRate} €/h)` : ""}
                 </option>
               ))}
             </select>

@@ -7,12 +7,22 @@ import { translations, Language } from "../utils/i18n";
 interface DailyLogManagerProps {
   logs: WorkLogEntry[];
   workers: WorkerProfile[];
+  selectedWorker?: WorkerProfile | null;
   onRefresh: () => void;
   defaultLocation: string;
   lang: Language;
+  userRole?: "worker" | "admin";
 }
 
-export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ logs, workers, onRefresh, defaultLocation, lang }) => {
+export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
+  logs,
+  workers,
+  selectedWorker,
+  onRefresh,
+  defaultLocation,
+  lang,
+  userRole = "worker",
+}) => {
   const t = translations[lang];
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTypeFilter, setSelectedTypeFilter] = useState("TUTTI");
@@ -20,7 +30,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ logs, workers,
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLog, setEditingLog] = useState<WorkLogEntry | null>(null);
 
-  const defaultWorker = workers[0] || { id: 1, name: "Mario Rossi", hourlyRate: "15.00" };
+  const defaultWorker = selectedWorker || workers[0] || { id: 1, name: "Mario Rossi", hourlyRate: "15.00" };
 
   // Form state
   const [formData, setFormData] = useState<WorkLogEntry>({
@@ -177,6 +187,12 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ logs, workers,
 
   // Filtering
   const filteredLogs = logs.filter((log) => {
+    // If worker mode, strictly only show this worker's logs
+    if (userRole === "worker" && selectedWorker) {
+      const isMyLog = log.workerId === selectedWorker.id || log.workerName?.trim().toLowerCase() === selectedWorker.name?.trim().toLowerCase();
+      if (!isMyLog) return false;
+    }
+
     const matchesSearch =
       (log.workerName && log.workerName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (log.locationName && log.locationName.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -186,9 +202,11 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ logs, workers,
 
     const matchesType = selectedTypeFilter === "TUTTI" || log.workType === selectedTypeFilter;
     const matchesWorker =
-      selectedWorkerFilter === "ALL" ||
-      String(log.workerId) === selectedWorkerFilter ||
-      log.workerName === selectedWorkerFilter;
+      userRole === "worker"
+        ? true
+        : selectedWorkerFilter === "ALL" ||
+          String(log.workerId) === selectedWorkerFilter ||
+          log.workerName === selectedWorkerFilter;
 
     return matchesSearch && matchesType && matchesWorker;
   });
@@ -239,22 +257,24 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ logs, workers,
           />
         </div>
 
-        {/* Worker Filter */}
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5">
-          <Users className="w-4 h-4 text-blue-600" />
-          <select
-            value={selectedWorkerFilter}
-            onChange={(e) => setSelectedWorkerFilter(e.target.value)}
-            className="bg-transparent text-sm text-slate-800 font-bold focus:outline-none cursor-pointer"
-          >
-            <option value="ALL">{t.allWorkers}</option>
-            {workers.map((w) => (
-              <option key={w.id} value={String(w.id)}>
-                {w.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Worker Filter (Manager only) */}
+        {userRole === "admin" && (
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5">
+            <Users className="w-4 h-4 text-blue-600" />
+            <select
+              value={selectedWorkerFilter}
+              onChange={(e) => setSelectedWorkerFilter(e.target.value)}
+              className="bg-transparent text-sm text-slate-800 font-bold focus:outline-none cursor-pointer"
+            >
+              <option value="ALL">{t.allWorkers}</option>
+              {workers.map((w) => (
+                <option key={w.id} value={String(w.id)}>
+                  {w.name} ({w.hourlyRate}€/h)
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Work Type Filter */}
         <select
@@ -291,7 +311,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ logs, workers,
                   <th className="px-4 py-3.5">{t.thTime}</th>
                   <th className="px-4 py-3.5">{t.thBreak}</th>
                   <th className="px-4 py-3.5">{t.thNetHours}</th>
-                  <th className="px-4 py-3.5">{t.thTotalPay}</th>
+                  {userRole === "admin" && <th className="px-4 py-3.5">{t.thTotalPay}</th>}
                   <th className="px-4 py-3.5">{t.thType}</th>
                   <th className="px-5 py-3.5">{t.thLocation}</th>
                   <th className="px-4 py-3.5 text-right">{t.thActions}</th>
@@ -349,12 +369,14 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ logs, workers,
                         </span>
                       </td>
 
-                      {/* Total Pay */}
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                          € {logPay}
-                        </span>
-                      </td>
+                      {/* Total Pay (Admin only) */}
+                      {userRole === "admin" && (
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            € {logPay}
+                          </span>
+                        </td>
+                      )}
 
                       {/* Work Type */}
                       <td className="px-4 py-4 whitespace-nowrap">
@@ -442,22 +464,36 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ logs, workers,
             <form onSubmit={handleSave} className="space-y-4">
               
               {/* Select Worker */}
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-                  {t.workerLabel} *
-                </label>
-                <select
-                  value={formData.workerId || ""}
-                  onChange={(e) => handleWorkerChangeInModal(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {workers.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name} ({w.hourlyRate} €/h)
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {userRole === "admin" ? (
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    {t.workerLabel} *
+                  </label>
+                  <select
+                    value={formData.workerId || ""}
+                    onChange={(e) => handleWorkerChangeInModal(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {workers.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name} ({w.hourlyRate} €/h)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                    {t.workerLabel}
+                  </label>
+                  <input
+                    type="text"
+                    disabled
+                    value={formData.workerName || selectedWorker?.name || "Lavoratore"}
+                    className="w-full px-3.5 py-2 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-600 font-bold cursor-not-allowed"
+                  />
+                </div>
+              )}
 
               {/* Date */}
               <div>
@@ -502,8 +538,8 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ logs, workers,
                 </div>
               </div>
 
-              {/* Break Minutes & Hourly Rate */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Break Minutes & Hourly Rate (Admin only) */}
+              <div className={`grid ${userRole === "admin" ? "grid-cols-2" : "grid-cols-1"} gap-3`}>
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
                     {t.thBreak} (min)
@@ -518,19 +554,21 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({ logs, workers,
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
-                    {t.hourlyRateLabel}
-                  </label>
-                  <input
-                    type="number"
-                    step="0.50"
-                    min="0"
-                    value={formData.hourlyRate || "15.00"}
-                    onChange={(e) => setFormData({ ...formData, hourlyRate: e.target.value })}
-                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
+                {userRole === "admin" && (
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">
+                      {t.hourlyRateLabel}
+                    </label>
+                    <input
+                      type="number"
+                      step="0.50"
+                      min="0"
+                      value={formData.hourlyRate || "15.00"}
+                      onChange={(e) => setFormData({ ...formData, hourlyRate: e.target.value })}
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Work Type */}
