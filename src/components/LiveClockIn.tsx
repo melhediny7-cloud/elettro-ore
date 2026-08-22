@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Play, Square, MapPin, Navigation, Clock, CheckCircle2, AlertCircle, RefreshCw, User, ChevronDown } from "lucide-react";
+import { Play, Square, MapPin, Navigation, Clock, CheckCircle2, AlertCircle, RefreshCw, User, ChevronDown, ShieldAlert } from "lucide-react";
 import { WorkLogEntry, WorkerProfile, createWorkLog, updateWorkLog, calculateNetHours, calculateTotalPay } from "../utils/api";
-import { getCurrentDateISO, getCurrentTimeHHMM, PRESET_LOCATIONS_IT, WORK_TYPES_IT, reverseGeocode } from "../utils/italian";
+import { getCurrentDateISO, getCurrentTimeHHMM, PRESET_LOCATIONS_IT, WORK_TYPES_IT, reverseGeocode, parseWorkplaceZone, verifyWorkerGeofence } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
 
 interface LiveClockInProps {
@@ -26,8 +26,10 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
   userRole = "worker",
 }) => {
   const t = translations[lang];
+  const workplaceZone = parseWorkplaceZone(defaultLocation);
+
   const [now, setNow] = useState(new Date());
-  const [selectedLocation, setSelectedLocation] = useState(defaultLocation || "Ufficio Sede");
+  const [selectedLocation, setSelectedLocation] = useState(workplaceZone.name || defaultLocation || "Ufficio Sede");
   const [customAddress, setCustomAddress] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [geoLoading, setGeoLoading] = useState(false);
@@ -36,6 +38,10 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
   const [breakMinutes, setBreakMinutes] = useState(0);
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Real-time Geofence monitoring
+  const [isOutOfGeofence, setIsOutOfGeofence] = useState(false);
+  const [currentDistance, setCurrentDistance] = useState<number | null>(null);
 
   const activeWorkerName = selectedWorker?.name || "Mario Rossi";
   const activeWorkerRate = selectedWorker?.hourlyRate || "15.00";
@@ -60,6 +66,33 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
     }
   }, [defaultLocation]);
 
+  // Real-time Geofence watcher when clocked-in
+  useEffect(() => {
+    if (!currentActiveLog || typeof navigator === "undefined" || !navigator.geolocation) return;
+
+    const checkPosition = (pos: GeolocationPosition) => {
+      const { latitude, longitude } = pos.coords;
+      const res = verifyWorkerGeofence(latitude, longitude, workplaceZone);
+      setCurrentDistance(res.distanceKm);
+      if (!res.allowed) {
+        setIsOutOfGeofence(true);
+        if (navigator.vibrate) {
+          navigator.vibrate([400, 200, 400, 200, 800]);
+        }
+      } else {
+        setIsOutOfGeofence(false);
+      }
+    };
+
+    const watchId = navigator.geolocation.watchPosition(
+      checkPosition,
+      (err) => console.warn("Watch position error", err),
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: 27000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [currentActiveLog, workplaceZone]);
+
   // Request browser geolocation
   const handleDetectLocation = () => {
     if (!navigator.geolocation) {
@@ -75,18 +108,33 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
         const { latitude, longitude } = pos.coords;
         setCoords({ lat: latitude, lng: longitude });
 
+        // Verify distance against Workplace 3km zone
+        const geoCheck = verifyWorkerGeofence(latitude, longitude, workplaceZone);
+        setCurrentDistance(geoCheck.distanceKm);
+
         // Reverse geocode to get street address
         const addr = await reverseGeocode(latitude, longitude);
         setCustomAddress(addr);
         setGeoLoading(false);
-        setStatusMessage({ type: "success", text: `Posizione GPS rilevata: ${addr}` });
+
+        if (geoCheck.allowed) {
+          setStatusMessage({
+            type: "success",
+            text: `✅ Posizione GPS Verificata: ${addr} (Distanza dal cantiere: ${geoCheck.distanceKm} km)`,
+          });
+        } else {
+          setStatusMessage({
+            type: "error",
+            text: `⚠️ Attenzione: Sei a ${geoCheck.distanceKm} km dal cantiere (Limite: ${workplaceZone.radiusKm} km). La timbratura è consentita solo entro 3 km.`,
+          });
+        }
       },
       (err) => {
         console.warn("Geolocation error", err);
         setGeoLoading(false);
         setStatusMessage({
           type: "error",
-          text: "Impossibile ottenere la posizione GPS. Inserisci il luogo manualmente.",
+          text: "Impossibile ottenere la posizione GPS. Attiva il GPS sul tuo telefono.",
         });
       },
       { enableHighAccuracy: true, timeout: 10000 }
@@ -95,6 +143,30 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
 
   // Clock In Action
   const handleClockIn = async () => {
+    // Geofencing verification for worker
+    if (userRole === "worker") {
+      if (!coords) {
+        setStatusMessage({
+          type: "error",
+          text: lang === "ar"
+            ? "⚠️ يجب الضغط على زر (Rileva Posizione GPS) أولاً للتحقق من وجودك داخل نطاق الـ 3 كم من موقع العمل!"
+            : "⚠️ Devi prima rilevare la posizione GPS per verificare la presenza entro il raggio di 3 km dal cantiere!",
+        });
+        return;
+      }
+
+      const check = verifyWorkerGeofence(coords.lat, coords.lng, workplaceZone);
+      if (!check.allowed) {
+        setStatusMessage({
+          type: "error",
+          text: lang === "ar"
+            ? `⚠️ تم رفض تسجيل الدخول: أنت خارج نطاق العمل المسموح! المسافة الحالية (${check.distanceKm} كم) أكبر من الحد المسموح (${workplaceZone.radiusKm} كم).`
+            : `⚠️ Timbratura Rifiutata: Sei fuori dalla zona di lavoro autorizzata (Distanza: ${check.distanceKm} km > ${workplaceZone.radiusKm} km dal cantiere).`,
+        });
+        return;
+      }
+    }
+
     setLoading(true);
     setStatusMessage(null);
     try {
@@ -195,6 +267,23 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       
+      {/* OUT OF GEOFENCE WARNING ALERT (Real-time detection) */}
+      {isOutOfGeofence && currentActiveLog && (
+        <div className="bg-rose-600 text-white p-5 rounded-2xl shadow-xl border-2 border-rose-400 animate-pulse flex items-start gap-4">
+          <ShieldAlert className="w-8 h-8 flex-shrink-0 text-amber-300 animate-bounce" />
+          <div className="flex-1">
+            <h3 className="font-black text-lg text-amber-200 uppercase tracking-wide">
+              {lang === "ar" ? "🚨 تحذير هام: لقد خرجت عن نطاق موقع العمل المسموح!" : "🚨 ALLARME GEOFENCING: SEI USCITO DAL CANTIERE!"}
+            </h3>
+            <p className="text-sm font-semibold mt-1 text-white">
+              {lang === "ar"
+                ? `المسافة الحالية عن موقع العمل: ${currentDistance || "> 3"} كم (الحد المسموح به: ${workplaceZone.radiusKm} كم). يجب عليك العودة فوراً إلى محيط العمل وإلا سيتم احتساب انصراف مبكر.`
+                : `Attualmente ti trovi a ${currentDistance} km dal centro del cantiere (Limite: ${workplaceZone.radiusKm} km). Rientra immediatamente nell'area di lavoro autorizzata.`}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Live Digital Clock & Status Banner */}
       <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-6 sm:p-8 shadow-xl border border-slate-700/80 relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />

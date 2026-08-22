@@ -96,3 +96,149 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string> 
   }
   return `Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`;
 }
+
+// -------------------------------------------------------------
+// GEOFENCING & GPS RADIUS VERIFICATION (3 KM ZONE)
+// -------------------------------------------------------------
+
+export interface WorkplaceZone {
+  name: string;
+  address: string;
+  lat: number;
+  lng: number;
+  radiusKm: number;
+}
+
+export const DEFAULT_WORKPLACE_ZONE: WorkplaceZone = {
+  name: "Cantiere Sede - Milano",
+  address: "Via Dante 12, Milano / Ospedale Sacco",
+  lat: 45.4642,
+  lng: 9.1900,
+  radiusKm: 3.0,
+};
+
+/**
+ * Calculates distance between two GPS coordinates in Kilometers using Haversine formula
+ */
+export function calculateDistanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  if (isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)) return 0;
+  
+  const R = 6371; // Earth radius in KM
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+      
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Number((R * c).toFixed(2));
+}
+
+/**
+ * Parses default location string which may contain encoded GPS and Radius
+ * Format: "Location Name | 45.4642, 9.1900 | 3.0"
+ */
+export function parseWorkplaceZone(storedLocation: string): WorkplaceZone {
+  if (!storedLocation || !storedLocation.trim()) {
+    return DEFAULT_WORKPLACE_ZONE;
+  }
+
+  if (storedLocation.includes("|")) {
+    const parts = storedLocation.split("|").map((p) => p.trim());
+    const name = parts[0] || "Cantiere Milano";
+    
+    let lat = DEFAULT_WORKPLACE_ZONE.lat;
+    let lng = DEFAULT_WORKPLACE_ZONE.lng;
+    let radiusKm = DEFAULT_WORKPLACE_ZONE.radiusKm;
+
+    if (parts[1] && parts[1].includes(",")) {
+      const coords = parts[1].split(",");
+      const parsedLat = parseFloat(coords[0]);
+      const parsedLng = parseFloat(coords[1]);
+      if (!isNaN(parsedLat) && !isNaN(parsedLng)) {
+        lat = parsedLat;
+        lng = parsedLng;
+      }
+    }
+
+    if (parts[2]) {
+      const parsedRadius = parseFloat(parts[2]);
+      if (!isNaN(parsedRadius) && parsedRadius > 0) {
+        radiusKm = parsedRadius;
+      }
+    }
+
+    return {
+      name,
+      address: name,
+      lat,
+      lng,
+      radiusKm,
+    };
+  }
+
+  return {
+    name: storedLocation,
+    address: storedLocation,
+    lat: DEFAULT_WORKPLACE_ZONE.lat,
+    lng: DEFAULT_WORKPLACE_ZONE.lng,
+    radiusKm: 3.0,
+  };
+}
+
+/**
+ * Formats workplace zone into unified storage string
+ */
+export function formatWorkplaceZone(
+  name: string,
+  lat: number | string,
+  lng: number | string,
+  radiusKm: number | string = 3.0
+): string {
+  const cleanName = (name || "Cantiere").replace(/\|/g, "-").trim();
+  const cleanLat = typeof lat === "number" ? lat : parseFloat(String(lat)) || DEFAULT_WORKPLACE_ZONE.lat;
+  const cleanLng = typeof lng === "number" ? lng : parseFloat(String(lng)) || DEFAULT_WORKPLACE_ZONE.lng;
+  const cleanRadius = typeof radiusKm === "number" ? radiusKm : parseFloat(String(radiusKm)) || 3.0;
+
+  return `${cleanName} | ${cleanLat},${cleanLng} | ${cleanRadius}`;
+}
+
+/**
+ * Checks if a worker's coordinates are inside the workplace zone
+ */
+export function verifyWorkerGeofence(
+  workerLat: number | string,
+  workerLng: number | string,
+  zone: WorkplaceZone
+): { allowed: boolean; distanceKm: number; message: string } {
+  const wLat = typeof workerLat === "number" ? workerLat : parseFloat(String(workerLat));
+  const wLng = typeof workerLng === "number" ? workerLng : parseFloat(String(workerLng));
+
+  if (isNaN(wLat) || isNaN(wLng)) {
+    return {
+      allowed: false,
+      distanceKm: 0,
+      message: "Posizione GPS del lavoratore non valida o non rilevata.",
+    };
+  }
+
+  const distanceKm = calculateDistanceKm(wLat, wLng, zone.lat, zone.lng);
+  const allowed = distanceKm <= zone.radiusKm;
+
+  return {
+    allowed,
+    distanceKm,
+    message: allowed
+      ? `Posizione valida (Distanza: ${distanceKm} km entro il raggio di ${zone.radiusKm} km)`
+      : `Fuori zona di lavoro autorizzata (Distanza: ${distanceKm} km > Limite: ${zone.radiusKm} km)`,
+  };
+}

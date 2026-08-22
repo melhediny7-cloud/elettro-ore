@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Plus, Trash2, Edit2, MapPin, Search, Calendar, Clock, ExternalLink, Navigation, Check, X, RefreshCw, Coins, User, Users } from "lucide-react";
 import { WorkLogEntry, WorkerProfile, createWorkLog, updateWorkLog, deleteWorkLog, clearAllWorkLogs, calculateNetHours, calculateTotalPay } from "../utils/api";
-import { formatDateIT, getCurrentDateISO, PRESET_LOCATIONS_IT, WORK_TYPES_IT, reverseGeocode } from "../utils/italian";
+import { formatDateIT, getCurrentDateISO, PRESET_LOCATIONS_IT, WORK_TYPES_IT, reverseGeocode, parseWorkplaceZone, verifyWorkerGeofence } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
 
 interface DailyLogManagerProps {
@@ -24,6 +24,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
   userRole = "worker",
 }) => {
   const t = translations[lang];
+  const workplaceZone = parseWorkplaceZone(defaultLocation);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTypeFilter, setSelectedTypeFilter] = useState("TUTTI");
   const [selectedWorkerFilter, setSelectedWorkerFilter] = useState("ALL");
@@ -158,14 +159,26 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // STRICT GPS REQUIREMENT FOR WORKERS
-    if (userRole === "worker" && (!formData.latitude || !formData.longitude)) {
-      alert(
-        lang === "ar"
-          ? "⚠️ تنبيه أمني: لا يمكن تسجيل الساعات إلا بتحديد موقعك الجغرافي الفعلي (GPS). يرجى الضغط على زر (Rileva Posizione GPS) أولاً!"
-          : "⚠️ Posizione GPS Obbligatoria: Devi rilevare la tua posizione GPS attuale per registrare le ore di lavoro!"
-      );
-      return;
+    // STRICT GPS & 3KM GEOFENCE REQUIREMENT FOR WORKERS
+    if (userRole === "worker") {
+      if (!formData.latitude || !formData.longitude) {
+        alert(
+          lang === "ar"
+            ? "⚠️ تنبيه أمني: لا يمكن تسجيل الساعات إلا بتحديد موقعك الجغرافي الفعلي (GPS). يرجى الضغط على زر (Rileva GPS) أولاً!"
+            : "⚠️ Posizione GPS Obbligatoria: Devi rilevare la tua posizione GPS attuale per registrare le ore di lavoro!"
+        );
+        return;
+      }
+
+      const check = verifyWorkerGeofence(formData.latitude, formData.longitude, workplaceZone);
+      if (!check.allowed) {
+        alert(
+          lang === "ar"
+            ? `⚠️ تم رفض تسجيل الساعات: موقعك الجغرافي (${check.distanceKm} كم) خارج نطاق العمل المسموح به (${workplaceZone.radiusKm} كم من Cantiere). يجب التواجد داخل موقع العمل الفعلي!`
+            : `⚠️ Registrazione Rifiutata: Sei fuori dalla zona di lavoro autorizzata (Distanza: ${check.distanceKm} km > ${workplaceZone.radiusKm} km dal cantiere).`
+        );
+        return;
+      }
     }
 
     setLoading(true);
