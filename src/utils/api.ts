@@ -519,6 +519,62 @@ export async function seedSampleData(): Promise<{ success: boolean; count: numbe
   return { success: true, count: sampleLogs.length };
 }
 
+export async function importDataFromJson(jsonData: string): Promise<{ success: boolean; count: number; message: string }> {
+  try {
+    const parsed = JSON.parse(jsonData);
+    const logsToImport: any[] = Array.isArray(parsed) ? parsed : (parsed.logs || []);
+    const workersToImport: any[] = parsed.workers || [];
+
+    let count = 0;
+
+    for (const w of workersToImport) {
+      if (w.name) {
+        await createWorker({
+          name: w.name,
+          hourlyRate: String(w.hourlyRate || w.hourly_rate || "15.00"),
+          role: w.role || "Operaio",
+          phone: w.phone || null,
+        });
+      }
+    }
+
+    const currentWorkers = await fetchWorkers();
+
+    for (const item of logsToImport) {
+      let workerId = item.workerId || item.worker_id;
+      const workerName = item.workerName || item.worker_name || "Mario Rossi";
+      if (!workerId) {
+        const found = currentWorkers.find((w) => w.name.trim().toLowerCase() === workerName.trim().toLowerCase());
+        if (found) workerId = found.id;
+      }
+
+      await createWorkLog({
+        workerId: workerId || null,
+        workerName: workerName,
+        date: item.date || new Date().toISOString().split("T")[0],
+        startTime: item.startTime || item.start_time || "08:00",
+        endTime: item.endTime || item.end_time || null,
+        breakMinutes: Number(item.breakMinutes || item.break_minutes || 0),
+        totalHours: String(item.totalHours || item.total_hours || "0.00"),
+        hourlyRate: String(item.hourlyRate || item.hourly_rate || "0.00"),
+        totalPay: String(item.totalPay || item.total_pay || "0.00"),
+        workType: item.workType || item.work_type || "Ordinario",
+        locationName: item.locationName || item.location_name || "Ufficio",
+        address: item.address || null,
+        latitude: item.latitude ? String(item.latitude) : null,
+        longitude: item.longitude ? String(item.longitude) : null,
+        notes: item.notes || null,
+        isClockedIn: Number(item.isClockedIn || item.is_clocked_in || 0),
+      });
+      count++;
+    }
+
+    return { success: true, count, message: `Importati con successo ${count} record!` };
+  } catch (err: any) {
+    return { success: false, count: 0, message: "Formato JSON non valido: " + err.message };
+  }
+}
+
 // -------------------------------------------------------------
 // APP SETTINGS & PIN AUTH (Supabase Cloud + Local Fallback)
 // -------------------------------------------------------------

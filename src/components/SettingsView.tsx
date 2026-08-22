@@ -317,6 +317,51 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
+      {/* 4. IMPORT HISTORICAL DATA MODAL / CARD */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+        <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+          <Database className="w-5 h-5 text-blue-600" />
+          <span>{lang === "ar" ? "استيراد بيانات أو سجلات سابقة" : "Importa Dati e Registri Precedenti"}</span>
+        </h3>
+        <p className="text-xs text-slate-500">
+          {lang === "ar" 
+            ? "إذا كان لديك كود بيانات محفوظ سابقاً، يمكنك لصقه هنا لإضافته فوراً إلى قاعدة البيانات السحابية." 
+            : "Incolla il JSON dei dati salvati precedentemente per importarli direttamente su Supabase Cloud."}
+        </p>
+
+        <textarea
+          id="jsonImportBox"
+          rows={3}
+          placeholder='[{"date":"2026-08-20","workerName":"Mario Rossi","startTime":"08:00","endTime":"17:00","totalHours":"8.00"}]'
+          className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+
+        <button
+          onClick={async () => {
+            const el = document.getElementById("jsonImportBox") as HTMLTextAreaElement;
+            if (!el || !el.value.trim()) {
+              alert(lang === "ar" ? "الرجاء لصق البيانات أولاً" : "Incolla prima i dati JSON");
+              return;
+            }
+            try {
+              const res = await (await import("../utils/api")).importDataFromJson(el.value);
+              if (res.success) {
+                alert(res.message);
+                el.value = "";
+                onRefresh();
+              } else {
+                alert(res.message);
+              }
+            } catch (e: any) {
+              alert("Errore: " + e.message);
+            }
+          }}
+          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow transition-all"
+        >
+          {lang === "ar" ? "📥 استيراد وحفظ في السحابة الآن" : "📥 Importa su Cloud Ora"}
+        </button>
+      </div>
+
       {/* Cloud Persistence Badge */}
       <div className="bg-slate-900 text-slate-300 p-4 rounded-xl text-xs flex items-center gap-3">
         <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0" />
