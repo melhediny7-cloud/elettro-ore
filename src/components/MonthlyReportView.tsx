@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { Printer, Download, Calendar, Clock, MapPin, Award, FileSpreadsheet, Building2, User, ChevronLeft, ChevronRight, Coins, Filter, Users } from "lucide-react";
+import React, { useState, useMemo, useEffect } from "react";
+import { Printer, Download, Calendar, Clock, MapPin, Award, FileSpreadsheet, Building2, User, ChevronLeft, ChevronRight, Coins, Filter, Users, PenTool, Check, ShieldCheck } from "lucide-react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -13,6 +13,7 @@ import { Bar } from "react-chartjs-2";
 import { WorkLogEntry, WorkerProfile, calculateTotalPay } from "../utils/api";
 import { MONTHS_IT, WORK_TYPES_IT, formatDateIT, getDayNameIT } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
+import { SignaturePad } from "./SignaturePad";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -31,8 +32,38 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, work
     String(currentDate.getMonth() + 1).padStart(2, "0")
   );
   const [selectedWorkerFilter, setSelectedWorkerFilter] = useState<string>("ALL");
+  const [showSignatureDrawer, setShowSignatureDrawer] = useState(false);
+
+  const [signatureWorker, setSignatureWorker] = useState<string | null>(null);
+  const [signatureManager, setSignatureManager] = useState<string | null>(null);
 
   const monthYearKey = `${selectedYear}-${selectedMonth}`;
+
+  // Sync signatures from storage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const sw = localStorage.getItem(`oralavoro_sig_worker_${monthYearKey}_${selectedWorkerFilter}`);
+      const sm = localStorage.getItem(`oralavoro_sig_manager_${monthYearKey}`);
+      setSignatureWorker(sw);
+      setSignatureManager(sm);
+    }
+  }, [monthYearKey, selectedWorkerFilter]);
+
+  const handleSaveWorkerSignature = (sig: string | null) => {
+    setSignatureWorker(sig);
+    if (typeof window !== "undefined") {
+      if (sig) localStorage.setItem(`oralavoro_sig_worker_${monthYearKey}_${selectedWorkerFilter}`, sig);
+      else localStorage.removeItem(`oralavoro_sig_worker_${monthYearKey}_${selectedWorkerFilter}`);
+    }
+  };
+
+  const handleSaveManagerSignature = (sig: string | null) => {
+    setSignatureManager(sig);
+    if (typeof window !== "undefined") {
+      if (sig) localStorage.setItem(`oralavoro_sig_manager_${monthYearKey}`, sig);
+      else localStorage.removeItem(`oralavoro_sig_manager_${monthYearKey}`);
+    }
+  };
 
   // Filter logs for selected month AND selected worker
   const monthlyLogs = useMemo(() => {
@@ -294,7 +325,19 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, work
           </div>
 
           {/* Export Action Buttons */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setShowSignatureDrawer(!showSignatureDrawer)}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold shadow-md transition-all whitespace-nowrap ${
+                signatureWorker || signatureManager
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                  : "bg-indigo-600 hover:bg-indigo-700 text-white"
+              }`}
+            >
+              <PenTool className="w-4 h-4" />
+              <span>{signatureWorker || signatureManager ? (lang === "ar" ? "✍️ التوقيع الرقمي (موقع)" : "✍️ Firme Inserite") : (lang === "ar" ? "✍️ التوقيع الرقمي" : "✍️ Firma PDF")}</span>
+            </button>
+
             <button
               onClick={handlePrint}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-md transition-all whitespace-nowrap"
@@ -313,6 +356,44 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, work
           </div>
         </div>
       </div>
+
+      {/* DIGITAL SIGNATURE DRAWER (Interactive Canvas) */}
+      {showSignatureDrawer && (
+        <div className="bg-white p-6 rounded-2xl border border-indigo-200 shadow-lg space-y-4 print:hidden animate-in fade-in">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <PenTool className="w-5 h-5 text-indigo-600" />
+                <span>{lang === "ar" ? "التوقيع الرقمي على التقرير الشهري (Firma Digitale PDF)" : "Firma Digitale per Report Mensile"}</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {lang === "ar"
+                  ? "وقّع بإصبعك على الشاشة لحفظ التوقيع وطباعته رسمياً في أسفل ملف الـ PDF."
+                  : "Firma con il dito sullo schermo per allegare la firma ufficiale in fondo al report stampabile."}
+              </p>
+            </div>
+            <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-200">
+              {selectedMonthName} {selectedYear}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <SignaturePad
+              label={lang === "ar" ? `✍️ توقيع العامل (${currentDisplayWorkerName})` : `✍️ Firma Lavoratore (${currentDisplayWorkerName})`}
+              initialSignature={signatureWorker}
+              onSaveSignature={handleSaveWorkerSignature}
+              lang={lang}
+            />
+
+            <SignaturePad
+              label={lang === "ar" ? `✍️ توقيع صاحب العمل / المدير (${companyName})` : `✍️ Firma Datore di Lavoro (${companyName})`}
+              initialSignature={signatureManager}
+              onSaveSignature={handleSaveManagerSignature}
+              lang={lang}
+            />
+          </div>
+        </div>
+      )}
 
       {/* METRIC SUMMARY CARDS (Interactive Screen) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 print:hidden">
@@ -547,15 +628,35 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, work
         )}
 
         {/* Signatures Section for Print / Official Submission */}
-        <div className="mt-12 pt-8 border-t border-slate-300 grid grid-cols-2 gap-8 text-xs font-semibold text-slate-700">
+        <div className="mt-10 pt-6 border-t border-slate-300 grid grid-cols-2 gap-8 text-xs font-semibold text-slate-700">
           <div>
-            <span className="block mb-10">{t.signatureWorker}</span>
+            <span className="block mb-1 font-bold">{t.signatureWorker}</span>
+            <div className="h-16 flex items-end">
+              {signatureWorker ? (
+                <img src={signatureWorker} alt="Firma Lavoratore" className="h-14 object-contain" />
+              ) : (
+                <div className="h-14" />
+              )}
+            </div>
             <div className="border-b border-slate-400 w-3/4" />
+            <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">
+              {currentDisplayWorkerName}
+            </span>
           </div>
 
           <div className="text-right">
-            <span className="block mb-10">{t.signatureManager}</span>
+            <span className="block mb-1 font-bold">{t.signatureManager}</span>
+            <div className="h-16 flex items-end justify-end">
+              {signatureManager ? (
+                <img src={signatureManager} alt="Firma Datore di Lavoro" className="h-14 object-contain" />
+              ) : (
+                <div className="h-14" />
+              )}
+            </div>
             <div className="border-b border-slate-400 w-3/4 ml-auto" />
+            <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">
+              {companyName} (Direzione)
+            </span>
           </div>
         </div>
 

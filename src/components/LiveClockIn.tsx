@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Play, Square, MapPin, Navigation, Clock, CheckCircle2, AlertCircle, RefreshCw, User, ChevronDown, ShieldAlert } from "lucide-react";
+import { Play, Square, MapPin, Navigation, Clock, CheckCircle2, AlertCircle, RefreshCw, User, ChevronDown, ShieldAlert, MessageSquare, Phone, Send, Share2 } from "lucide-react";
 import { WorkLogEntry, WorkerProfile, createWorkLog, updateWorkLog, calculateNetHours, calculateTotalPay } from "../utils/api";
 import { getCurrentDateISO, getCurrentTimeHHMM, PRESET_LOCATIONS_IT, WORK_TYPES_IT, reverseGeocode, parseWorkplaceZone, verifyWorkerGeofence } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
@@ -333,6 +333,37 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
     }
   };
 
+  // WhatsApp direct report helper
+  const sendWhatsAppReport = (type: "entrata" | "uscita" | "allarme") => {
+    const managerPhone = typeof window !== "undefined" ? localStorage.getItem("oralavoro_managerPhone") || "" : "";
+    const cleanPhone = managerPhone.replace(/[^0-9]/g, "");
+    const workerName = selectedWorker ? selectedWorker.name : "Lavoratore";
+    const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const dateStr = now.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
+    const locationStr = currentActiveLog?.address || currentActiveLog?.locationName || workplaceZone.name || "Cantiere";
+    const gpsCoords = currentActiveLog?.latitude && currentActiveLog?.longitude 
+      ? `${currentActiveLog.latitude},${currentActiveLog.longitude}` 
+      : `${workplaceZone.lat},${workplaceZone.lng}`;
+    
+    let title = "📌 *NOTIFICA ELETTRO-ORE*";
+    let statusText = type === "entrata" ? "🟢 TIMBRATURA ENTRATA (Inizio Turno)" : (type === "uscita" ? "🔴 TIMBRATURA USCITA (Fine Turno)" : "🚨 ALLARME FUORI CANTIERE");
+    
+    const msg = `${title}
+${statusText}
+
+👷 *Lavoratore:* ${workerName}
+⏰ *Orario:* ${timeStr}
+📅 *Data:* ${dateStr}
+📍 *Cantiere:* ${workplaceZone.name}
+🗺️ *Indirizzo GPS:* ${locationStr}
+🌐 *Mappa Google:* https://www.google.com/maps?q=${gpsCoords}
+
+_Inviato da ElettroOre Italia_`;
+
+    const url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
+    window.open(url, "_blank");
+  };
+
   // Calculate elapsed time if currently clocked in
   const getElapsedTime = () => {
     if (!currentActiveLog || !currentActiveLog.startTime) return "00:00";
@@ -367,13 +398,24 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
                 : "Rientra immediatamente sul posto di lavoro."}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => playGeofenceAlarmSound()}
-            className="px-3 py-1.5 bg-amber-400 text-slate-900 font-extrabold text-xs rounded-xl shadow hover:bg-amber-300 transition-all flex items-center gap-1 self-center"
-          >
-            <span>🔊 {lang === "ar" ? "صوت الإنذار" : "Allarme"}</span>
-          </button>
+          <div className="flex items-center gap-2 self-center flex-wrap">
+            <button
+              type="button"
+              onClick={() => playGeofenceAlarmSound()}
+              className="px-3 py-1.5 bg-amber-400 text-slate-900 font-extrabold text-xs rounded-xl shadow hover:bg-amber-300 transition-all flex items-center gap-1 cursor-pointer"
+            >
+              <span>🔊 {lang === "ar" ? "صوت الإنذار" : "Allarme"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => sendWhatsAppReport("allarme")}
+              className="px-3 py-1.5 bg-slate-900/80 hover:bg-slate-900 text-white font-extrabold text-xs rounded-xl shadow transition-all flex items-center gap-1 border border-white/20 cursor-pointer"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{lang === "ar" ? "واتساب المدير" : "WhatsApp"}</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -683,6 +725,32 @@ export const LiveClockIn: React.FC<LiveClockInProps> = ({
             )}
             <span>TIMBRA USCITA</span>
           </button>
+
+          {/* Quick WhatsApp Report to Manager */}
+          <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <span className="text-xs text-slate-500 font-medium">
+              {lang === "ar" ? "📱 إشعار المدير بتسجيل الدخول / الخروج:" : "📱 Notifica istantanea per il Titolare:"}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => sendWhatsAppReport("entrata")}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>{lang === "ar" ? "إشعار الدخول 💬" : "Notifica Entrata 💬"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => sendWhatsAppReport("uscita")}
+                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5 text-emerald-400" />
+                <span>{lang === "ar" ? "إشعار الخروج 💬" : "Notifica Uscita 💬"}</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

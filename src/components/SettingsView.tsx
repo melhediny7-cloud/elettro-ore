@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Building2, MapPin, Database, RefreshCw, Check, Trash2, ShieldCheck, Lock, Shield, KeyRound, AlertCircle, Navigation, Compass, ShieldAlert } from "lucide-react";
+import { Building2, MapPin, Database, RefreshCw, Check, Trash2, ShieldCheck, Lock, Shield, KeyRound, AlertCircle, Navigation, Compass, ShieldAlert, MessageSquare, Phone, Send, Smartphone } from "lucide-react";
 import { seedSampleData, clearAllWorkLogs, clearAllWorkers, changeAdminPin, updateAppSettings } from "../utils/api";
 import { parseWorkplaceZone, formatWorkplaceZone, reverseGeocode } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
@@ -29,6 +29,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [saved, setSaved] = useState(false);
   const [loadingSeed, setLoadingSeed] = useState(false);
   const [loadingClear, setLoadingClear] = useState(false);
+
+  // WhatsApp Manager Phone
+  const [managerPhone, setManagerPhone] = useState(() => {
+    return typeof window !== "undefined" ? localStorage.getItem("oralavoro_managerPhone") || "+39 351 000 0000" : "+39 351 000 0000";
+  });
+  const [whatsappSaved, setWhatsappSaved] = useState(false);
 
   // Geofence Zone state
   const initialZone = parseWorkplaceZone(defaultLocation);
@@ -553,7 +559,70 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </form>
       </div>
 
-      {/* 3. DATABASE & CLOUD TOOLS */}
+      {/* 3. WHATSAPP MANAGER NOTIFICATIONS */}
+      <div className="bg-white p-6 rounded-2xl border border-emerald-200 shadow-sm space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-emerald-600" />
+              <span>{lang === "ar" ? "إشعارات الواتساب الفورية للمدير (Notifiche WhatsApp)" : "Notifiche WhatsApp al Manager"}</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {lang === "ar"
+                ? "حدد رقم هاتف المدير لاستلام تقارير الحضور والانصراف وموقع الـ GPS للعمال فورياً على واتساب."
+                : "Imposta il numero WhatsApp del titolare per ricevere le notifiche di entrata/uscita dei lavoratori con GPS."}
+            </p>
+          </div>
+          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg border border-emerald-200 flex items-center gap-1">
+            <Smartphone className="w-3.5 h-3.5" /> WhatsApp
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-1 flex items-center gap-1.5">
+              <Phone className="w-4 h-4 text-emerald-600" />
+              <span>{lang === "ar" ? "رقم هاتف المدير (مع كود الدولة):" : "Numero WhatsApp Titolare (con prefisso):"}</span>
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={managerPhone}
+                onChange={(e) => setManagerPhone(e.target.value)}
+                placeholder="+39 351 123 4567"
+                className="flex-1 px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem("oralavoro_managerPhone", managerPhone);
+                  }
+                  setWhatsappSaved(true);
+                  setTimeout(() => setWhatsappSaved(false), 3000);
+                }}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>{lang === "ar" ? "حفظ الرقم" : "Salva Numero"}</span>
+              </button>
+            </div>
+            {whatsappSaved && (
+              <span className="text-xs font-bold text-emerald-600 flex items-center gap-1 mt-1">
+                <Check className="w-3.5 h-3.5" /> {lang === "ar" ? "تم حفظ رقم المدير بنجاح!" : "Numero salvato con successo!"}
+              </span>
+            )}
+          </div>
+
+          <div className="p-3 bg-emerald-50/70 border border-emerald-100 rounded-xl text-xs text-emerald-900 font-medium">
+            💡 {lang === "ar" 
+              ? "عند قيام أي عامل بختم الدخول أو الخروج، يمكن إرسال إشعار فوري يحتوي على اسم العامل، التوقيت، ورابط جوجل ماب لموقعه الجغرافي."
+              : "Ogni timbratura genera un riepilogo con orario, nome lavoratore e link diretto Google Maps della posizione."}
+          </div>
+        </div>
+      </div>
+
+      {/* 4. DATABASE & CLOUD TOOLS */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
         <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
           <Database className="w-5 h-5 text-indigo-600" />

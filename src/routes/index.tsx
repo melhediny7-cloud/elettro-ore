@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useCallback } from "react";
 import { Header } from "../components/Header";
+import { PWAInstallBanner } from "../components/PWAInstallBanner";
 import { LiveClockIn } from "../components/LiveClockIn";
 import { WorkerManagerView } from "../components/WorkerManagerView";
 import { DailyLogManager } from "../components/DailyLogManager";
@@ -117,6 +118,9 @@ function AppHome() {
       dir={lang === "ar" ? "rtl" : "ltr"}
       className="min-h-screen bg-slate-100/70 text-slate-800 flex flex-col font-sans selection:bg-blue-500 selection:text-white"
     >
+      {/* PWA Install Banner */}
+      <PWAInstallBanner lang={lang} />
+
       {/* Navigation Header */}
       <Header
         activeTab={activeTab}
