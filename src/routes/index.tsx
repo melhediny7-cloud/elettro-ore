@@ -473,6 +473,11 @@ function AppHome() {
               onSubmit={(e) => {
                 e.preventDefault();
                 const inputTrimmed = adminLockPinInput.trim();
+                // Block weak/default PIN "1234" from ever granting admin access
+                if (inputTrimmed === "1234") {
+                  setAdminLockPinError(true);
+                  return;
+                }
                 if (inputTrimmed === adminPin.trim() || inputTrimmed === "4159985") {
                   setUserRole("admin");
                   setActiveTab("timbratrice");
@@ -489,7 +494,7 @@ function AppHome() {
                 type="password"
                 required
                 autoFocus
-                autoComplete="new-password"
+                autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
                 spellCheck="false"
@@ -499,7 +504,7 @@ function AppHome() {
                   setAdminLockPinInput(e.target.value);
                   setAdminLockPinError(false);
                 }}
-                placeholder="PIN (es. 4159985)"
+                placeholder="••••••••"
                 maxLength={10}
                 className="w-full px-3.5 py-3 bg-slate-50 border border-slate-300 rounded-xl text-center text-lg font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />

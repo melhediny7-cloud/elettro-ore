@@ -1,10 +1,60 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Play, Square, MapPin, Navigation, Clock, CheckCircle2, AlertCircle, RefreshCw, User, ChevronDown, ShieldAlert, MessageSquare, Phone, Send, Share2, X } from "lucide-react";
-import { WorkLogEntry, WorkerProfile, createWorkLog, updateWorkLog, calculateNetHours, calculateTotalPay } from "../utils/api";
-import { getCurrentDateISO, getCurrentTimeHHMM, PRESET_LOCATIONS_IT, WORK_TYPES_IT, reverseGeocode, parseWorkplaceZone, verifyWorkerGeofence } from "../utils/italian";
+import { WorkLogEntry, WorkerProfile, WorkSite, createWorkLog, updateWorkLog, calculateNetHours, calculateTotalPay } from "../utils/api";
+import { getCurrentDateISO, getCurrentTimeHHMM, PRESET_LOCATIONS_IT, WORK_TYPES_IT, reverseGeocode, parseWorkplaceZone, verifyWorkerGeofence, calculateDistanceKm } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
 
-// Web Audio API Alarm Sound Generator
+// Web Audio API Sound Effects Generator
+function playClockInSound() {
+  if (typeof window === "undefined") return;
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6 (Pleasant uplifting chime)
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.08);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + idx * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.08 + 0.22);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + idx * 0.08);
+      osc.stop(ctx.currentTime + idx * 0.08 + 0.22);
+    });
+  } catch (e) {
+    console.warn("Audio chime playback error", e);
+  }
+}
+
+function playClockOutSound() {
+  if (typeof window === "undefined") return;
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+
+    const notes = [783.99, 659.25, 523.25]; // G5, E5, C5 (Smooth completion sound)
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.1);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + idx * 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.1 + 0.28);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + idx * 0.1);
+      osc.stop(ctx.currentTime + idx * 0.1 + 0.28);
+    });
+  } catch (e) {
+    console.warn("Audio chime playback error", e);
+  }
+}
+
 function playGeofenceAlarmSound() {
   if (typeof window === "undefined") return;
   try {
@@ -361,6 +411,7 @@ _تنبيه تلقائي من نظام ElettroOre_`;
         isClockedIn: 1,
       });
 
+      playClockInSound();
       if (typeof navigator !== "undefined" && navigator.vibrate) {
         navigator.vibrate([40, 60, 40]);
       }
@@ -407,6 +458,7 @@ _تنبيه تلقائي من نظام ElettroOre_`;
         notes: notes || currentActiveLog.notes,
       });
 
+      playClockOutSound();
       if (typeof navigator !== "undefined" && navigator.vibrate) {
         navigator.vibrate([60, 80, 60]);
       }
@@ -796,7 +848,7 @@ _تم الإرسال تلقائياً من تطبيق ElettroOre Italia_`;
               {(() => {
                 const nowHHMM = getCurrentTimeHHMM();
                 const netH = calculateNetHours(currentActiveLog.startTime, nowHHMM, Number(breakMinutes));
-                const rateToUse = currentActiveLog.hourlyRate ? String(currentActiveLog.hourlyRate) : hourlyRate || "12.50";
+                const rateToUse = currentActiveLog.hourlyRate ? String(currentActiveLog.hourlyRate) : activeWorkerRate || "12.50";
                 const payEst = calculateTotalPay(netH, rateToUse);
                 return (
                   <span className="text-lg font-black text-emerald-700 block">€ {payEst} ({netH}h)</span>

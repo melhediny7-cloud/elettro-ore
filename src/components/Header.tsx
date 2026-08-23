@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Clock, Calendar, FileText, Settings, MapPin, Globe, Shield, ShieldCheck, Users, Lock, Unlock, User, LogOut, HardHat, Wifi, WifiOff, RotateCw } from "lucide-react";
+import { Clock, Calendar, FileText, Settings, MapPin, Globe, Shield, ShieldCheck, Users, Lock, Unlock, User, LogOut, HardHat, Wifi, WifiOff, RotateCw, Sun, Moon } from "lucide-react";
 import { formatDateIT, getCurrentDateISO } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
 import { WorkerProfile, verifyAdminPin, getPendingQueueCount, syncOfflineQueue } from "../utils/api";
@@ -37,6 +37,30 @@ export const Header: React.FC<HeaderProps> = ({
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState(false);
+
+  // Dark Mode state
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("oralavoro_theme");
+      if (saved) return saved === "dark";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      if (isDark) {
+        document.documentElement.classList.add("dark");
+        localStorage.setItem("oralavoro_theme", "dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+        localStorage.setItem("oralavoro_theme", "light");
+      }
+    }
+  }, [isDark]);
+
+  const toggleDarkMode = () => setIsDark((prev) => !prev);
 
   // Live Network & Offline Sync State
   const [isOnline, setIsOnline] = useState<boolean>(
@@ -142,6 +166,25 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-50 print:hidden">
+      {/* Prominent Full-Width Offline Alert Banner */}
+      {!isOnline && (
+        <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-orange-500 text-slate-950 px-4 py-2.5 shadow-md flex items-center justify-between text-xs sm:text-sm font-bold border-b border-amber-600/40 animate-pulse">
+          <div className="flex items-center gap-2.5 max-w-5xl mx-auto flex-1">
+            <WifiOff className="w-5 h-5 flex-shrink-0 text-slate-950" />
+            <span>
+              {lang === "ar"
+                ? "📶 تنبيه: أنت تعمل الآن في وضع عدم الاتصال (أوفلاين) 🚇 — جميع التسجيلات تُحفظ بأمان في هاتفك وتُرفع تلقائياً للسيرفر فور عودة الإنترنت."
+                : "📶 Attenzione: Modalità Offline Attiva 🚇 — Le timbrature vengono salvate in locale e caricate automaticamente appena torna la connessione."}
+            </span>
+          </div>
+          {pendingCount > 0 && (
+            <span className="bg-slate-950 text-amber-300 px-3 py-1 rounded-lg text-xs font-black ml-3 shadow-inner whitespace-nowrap">
+              {pendingCount} {lang === "ar" ? "عمليات معلقة للرفع" : "in attesa"}
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Top bar with Logo, Role Switcher, Worker Selector & Language */}
@@ -175,6 +218,16 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Right Tools: Worker Selector, Role Switch, Language & Date */}
           <div className="flex items-center gap-2.5 text-xs sm:text-sm flex-wrap">
             
+            {/* Dark Mode Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleDarkMode}
+              title={isDark ? (lang === "ar" ? "الوضع الفاتح ☀️" : "Modalità Chiara ☀️") : (lang === "ar" ? "الوضع الداكن 🌙" : "Modalità Scura 🌙")}
+              className="p-2 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 rounded-lg transition-all cursor-pointer flex items-center justify-center shadow-sm"
+            >
+              {isDark ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4 text-indigo-300" />}
+            </button>
+
             {/* Language Switcher Toggle */}
             <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-1">
               <Globe className="w-3.5 h-3.5 text-blue-400 mx-1.5" />

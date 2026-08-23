@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Printer, Download, Calendar, Clock, MapPin, Award, FileSpreadsheet, Building2, User, ChevronLeft, ChevronRight, Coins, Filter, Users, PenTool, Check, ShieldCheck, MessageSquare, Send, HardHat } from "lucide-react";
+import { Printer, Download, Calendar, Clock, MapPin, Award, FileSpreadsheet, Building2, User, ChevronLeft, ChevronRight, Coins, Filter, Users, PenTool, Check, ShieldCheck, MessageSquare, Send, HardHat, Mail } from "lucide-react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -14,6 +14,7 @@ import { WorkLogEntry, WorkerProfile, WorkSite, calculateTotalPay } from "../uti
 import { MONTHS_IT, WORK_TYPES_IT, formatDateIT, getDayNameIT } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
 import { SignaturePad } from "./SignaturePad";
+import { generateExcelReport } from "../utils/excelExport";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -290,6 +291,43 @@ _Inviato da ElettroOre Italia_`;
     window.open(waUrl, "_blank");
   };
 
+  const handleExportExcel = () => {
+    generateExcelReport(
+      monthlyLogs,
+      workers,
+      selectedMonthName,
+      selectedYear,
+      currentDisplayWorkerName,
+      companyName || "Azienda s.r.l."
+    );
+  };
+
+  const handleSendEmail = () => {
+    const workerName = selectedWorker ? selectedWorker.name : currentDisplayWorkerName;
+    const daysCount = monthlyLogs.length;
+    const totalHoursStr = totalMonthlyHours.toFixed(2);
+    const totalEarningsStr = totalMonthlyEarnings.toFixed(2);
+
+    const subject = encodeURIComponent(
+      `Rapporto Ore Lavoro - ${workerName} - ${selectedMonthName} ${selectedYear}`
+    );
+    const body = encodeURIComponent(
+      `Gentile Amministrazione,\n\n` +
+      `Si trasmette in allegato/riepilogo il resoconto ufficiale delle ore di lavoro per il mese di ${selectedMonthName} ${selectedYear}:\n\n` +
+      `👤 Dipendente: ${workerName}\n` +
+      `🏢 Azienda: ${companyName || "Azienda s.r.l."}\n` +
+      `📅 Mese: ${selectedMonthName} ${selectedYear}\n` +
+      `⏱️ Ore Totali Lavorate: ${totalHoursStr} ore\n` +
+      `🗓️ Giorni Lavorati: ${daysCount} giorni\n` +
+      `💶 Totale Compenso: € ${totalEarningsStr}\n` +
+      `✍️ Firma Digitale: ${signatureWorker ? "Firmato Regolarmente" : "In attesa di firma"}\n\n` +
+      `Report generato da ElettroOre Italia.\n\n` +
+      `Cordiali saluti,\n${workerName}`
+    );
+
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       
@@ -416,12 +454,32 @@ _Inviato da ElettroOre Italia_`;
               <span>{lang === "ar" ? "📲 إرسال الساعات للمدير عبر واتساب" : "📲 Invia Ore su WhatsApp"}</span>
             </button>
 
+            {/* Instant Email Send Button */}
+            <button
+              type="button"
+              onClick={handleSendEmail}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all whitespace-nowrap cursor-pointer"
+            >
+              <Mail className="w-4 h-4" />
+              <span>{lang === "ar" ? "📧 إرسال بالإيميل" : "📧 Invia Email"}</span>
+            </button>
+
             <button
               onClick={handlePrint}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-md transition-all whitespace-nowrap cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               <span>{t.btnPrint}</span>
+            </button>
+
+            {/* Real Excel (.xls / SpreadsheetML) Export Button */}
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all whitespace-nowrap cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+              <span>{lang === "ar" ? "📊 تصدير Excel" : "📊 Export Excel"}</span>
             </button>
 
             <button
