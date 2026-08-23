@@ -16,11 +16,11 @@ export const translations = {
     switchRole: "Cambia Ruolo",
     pinPrompt: "Accesso Riservato Manager",
     pinDesc: "Inserisci il PIN per accedere alla gestione dei lavoratori, compensi e report.",
-    pinPlaceholder: "PIN di sicurezza (default: 1234)",
+    pinPlaceholder: "PIN di sicurezza Manager",
     pinWrong: "PIN errato! Riprova.",
     btnUnlock: "Sblocca Accesso",
     btnLock: "Torna a Modalità Lavoratore",
-    adminPinLabel: "PIN di Accesso Manager (4 cifre)",
+    adminPinLabel: "PIN di Accesso Manager",
     adminPinHelp: "Codice necessario per sbloccare la modalità manager e visualizzare i compensi.",
 
     // Worker Selection
@@ -162,11 +162,11 @@ export const translations = {
     switchRole: "تبديل الوضع",
     pinPrompt: "دخول خاص بالمدير / الإدارة",
     pinDesc: "أدخل الرقم السري للوصول للوحة التحكم وحساب الرواتب والتقارير المالية.",
-    pinPlaceholder: "الرمز السري (الافتراضي: 1234)",
+    pinPlaceholder: "الرمز السري الخاص بالمدير",
     pinWrong: "الرمز السري غير صحيح! حاول مجدداً.",
     btnUnlock: "فتح لوحة التحكم",
     btnLock: "العودة لوضع العامل",
-    adminPinLabel: "الرقم السري للمدير (4 أرقام)",
+    adminPinLabel: "الرقم السري للمدير (PIN)",
     adminPinHelp: "الرمز المطلوب لفتح لوحة المدير وحسابات الرواتب من تليفونك.",
 
     // Worker Selection

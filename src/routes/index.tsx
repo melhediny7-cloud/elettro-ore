@@ -36,7 +36,7 @@ function AppHome() {
   // Company Settings
   const [companyName, setCompanyName] = useState("Azienda s.r.l.");
   const [defaultLocation, setDefaultLocation] = useState("Ufficio Sede - Milano");
-  const [adminPin, setAdminPin] = useState("1234");
+  const [adminPin, setAdminPin] = useState("4159985");
 
   const setLang = (newLang: Language) => {
     setLangState(newLang);
@@ -88,11 +88,16 @@ function AppHome() {
       const storedCompany = localStorage.getItem("oralavoro_companyName");
       const storedLoc = localStorage.getItem("oralavoro_defaultLocation");
       const storedLang = localStorage.getItem("oralavoro_lang") as Language;
-      const storedPin = localStorage.getItem("oralavoro_adminPin");
+      const storedPin = localStorage.getItem("oralavoro_adminPin") || localStorage.getItem("oralavoro_admin_pin");
 
       if (storedCompany) setCompanyName(storedCompany);
       if (storedLoc) setDefaultLocation(storedLoc);
-      if (storedPin) setAdminPin(storedPin);
+      if (storedPin && storedPin !== "1234") {
+        setAdminPin(storedPin);
+      } else {
+        setAdminPin("4159985");
+        localStorage.setItem("oralavoro_adminPin", "4159985");
+      }
       if (storedLang === "it" || storedLang === "ar") setLangState(storedLang);
       
       // Always start in worker mode with locked screen
@@ -106,10 +111,12 @@ function AppHome() {
       if (settings && settings.defaultLocation) {
         setCompanyName(settings.companyName);
         setDefaultLocation(settings.defaultLocation);
-        setAdminPin(settings.adminPin);
+        const resolvedPin = settings.adminPin && settings.adminPin !== "1234" ? settings.adminPin : "4159985";
+        setAdminPin(resolvedPin);
         if (typeof window !== "undefined") {
           localStorage.setItem("oralavoro_defaultLocation", settings.defaultLocation);
           localStorage.setItem("oralavoro_companyName", settings.companyName);
+          localStorage.setItem("oralavoro_adminPin", resolvedPin);
         }
       }
     }).catch(console.error);
@@ -463,7 +470,8 @@ function AppHome() {
               onSubmit={(e) => {
                 e.preventDefault();
                 const inputTrimmed = adminLockPinInput.trim();
-                if (inputTrimmed === "1234" || (adminPin && inputTrimmed === adminPin.trim()) || inputTrimmed === "4159985") {
+                const currentSavedPin = typeof window !== "undefined" ? localStorage.getItem("oralavoro_adminPin") || adminPin || "4159985" : adminPin || "4159985";
+                if (inputTrimmed === currentSavedPin.trim() || inputTrimmed === "4159985") {
                   setUserRole("admin");
                   setActiveTab("timbratrice");
                   setIsAdminLockModalOpen(false);
@@ -484,7 +492,7 @@ function AppHome() {
                   setAdminLockPinInput(e.target.value);
                   setAdminLockPinError(false);
                 }}
-                placeholder="PIN (es. 1234)"
+                placeholder="PIN (es. 4159985)"
                 maxLength={10}
                 className="w-full px-3.5 py-3 bg-slate-50 border border-slate-300 rounded-xl text-center text-lg font-mono font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />

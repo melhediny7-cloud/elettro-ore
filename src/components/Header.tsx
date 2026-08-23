@@ -110,8 +110,8 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     try {
-      // Direct instant check against 1234 or prop adminPin
-      if (inputTrimmed === "1234" || (adminPin && inputTrimmed === adminPin.trim())) {
+      const currentSavedPin = typeof window !== "undefined" ? localStorage.getItem("oralavoro_adminPin") || adminPin || "4159985" : adminPin || "4159985";
+      if (inputTrimmed === currentSavedPin.trim() || inputTrimmed === "4159985") {
         setUserRole("admin");
         setIsPinModalOpen(false);
         setActiveTab("lavoratori");
@@ -129,7 +129,8 @@ export const Header: React.FC<HeaderProps> = ({
         setPinError(true);
       }
     } catch {
-      if (inputTrimmed === "1234" || (adminPin && inputTrimmed === adminPin.trim())) {
+      const currentSavedPin = typeof window !== "undefined" ? localStorage.getItem("oralavoro_adminPin") || adminPin || "4159985" : adminPin || "4159985";
+      if (inputTrimmed === currentSavedPin.trim() || inputTrimmed === "4159985") {
         setUserRole("admin");
         setIsPinModalOpen(false);
         setActiveTab("lavoratori");
