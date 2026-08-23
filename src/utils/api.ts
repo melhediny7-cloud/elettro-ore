@@ -868,18 +868,17 @@ export async function fetchAppSettings(): Promise<AppSettings> {
     console.warn("Could not fetch app_settings from Supabase", e);
   }
 
-  let localPin = "4159985";
+  // Clean any old stored PINs from localStorage for security
   if (typeof window !== "undefined") {
-    const p = localStorage.getItem("oralavoro_adminPin") || localStorage.getItem("oralavoro_admin_pin");
-    if (p && p !== "1234") localPin = p;
-    else localStorage.setItem("oralavoro_adminPin", "4159985");
+    localStorage.removeItem("oralavoro_adminPin");
+    localStorage.removeItem("oralavoro_admin_pin");
   }
 
   return {
     id: "general",
     companyName: typeof window !== "undefined" ? localStorage.getItem("oralavoro_company_name") || "Power" : "Power",
     defaultLocation: typeof window !== "undefined" ? localStorage.getItem("oralavoro_default_location") || "Ufficio Sede - Milano" : "Ufficio Sede - Milano",
-    adminPin: localPin,
+    adminPin: "4159985",
     managerPhone: typeof window !== "undefined" ? localStorage.getItem("oralavoro_managerPhone") || "" : "",
   };
 }
@@ -918,8 +917,7 @@ export async function verifyAdminPin(pin: string): Promise<boolean> {
     const settings = await fetchAppSettings();
     return settings.adminPin.trim() === pinInputTrimmed;
   } catch {
-    const local = typeof window !== "undefined" ? localStorage.getItem("oralavoro_adminPin") || localStorage.getItem("oralavoro_admin_pin") || "4159985" : "4159985";
-    return local.trim() === pinInputTrimmed;
+    return pinInputTrimmed === "4159985";
   }
 }
 
@@ -936,9 +934,10 @@ export async function changeAdminPin(currentPin: string, newPin: string): Promis
     }
 
     const updatedPin = newPin.trim();
+    // Do NOT store in localStorage for security
     if (typeof window !== "undefined") {
-      localStorage.setItem("oralavoro_adminPin", updatedPin);
-      localStorage.setItem("oralavoro_admin_pin", updatedPin);
+      localStorage.removeItem("oralavoro_adminPin");
+      localStorage.removeItem("oralavoro_admin_pin");
     }
 
     await updateAppSettings({ adminPin: updatedPin });

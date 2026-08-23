@@ -308,6 +308,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <input
                 type="password"
                 required
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
                 maxLength={8}
                 value={currentPinInput}
                 onChange={(e) => setCurrentPinInput(e.target.value)}
@@ -324,6 +328,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <input
                 type="password"
                 required
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
                 maxLength={8}
                 value={newPinInput}
                 onChange={(e) => setNewPinInput(e.target.value)}
@@ -340,6 +348,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <input
                 type="password"
                 required
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
                 maxLength={8}
                 value={confirmPinInput}
                 onChange={(e) => setConfirmPinInput(e.target.value)}

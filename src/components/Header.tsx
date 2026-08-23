@@ -110,8 +110,7 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     try {
-      const currentSavedPin = typeof window !== "undefined" ? localStorage.getItem("oralavoro_adminPin") || adminPin || "4159985" : adminPin || "4159985";
-      if (inputTrimmed === currentSavedPin.trim() || inputTrimmed === "4159985") {
+      if (inputTrimmed === adminPin.trim() || inputTrimmed === "4159985") {
         setUserRole("admin");
         setIsPinModalOpen(false);
         setActiveTab("lavoratori");
@@ -129,8 +128,7 @@ export const Header: React.FC<HeaderProps> = ({
         setPinError(true);
       }
     } catch {
-      const currentSavedPin = typeof window !== "undefined" ? localStorage.getItem("oralavoro_adminPin") || adminPin || "4159985" : adminPin || "4159985";
-      if (inputTrimmed === currentSavedPin.trim() || inputTrimmed === "4159985") {
+      if (inputTrimmed === adminPin.trim() || inputTrimmed === "4159985") {
         setUserRole("admin");
         setIsPinModalOpen(false);
         setActiveTab("lavoratori");
@@ -442,6 +440,11 @@ export const Header: React.FC<HeaderProps> = ({
                 <input
                   type="password"
                   autoFocus
+                  autoComplete="new-password"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                  name="header_admin_pin_field"
                   maxLength={10}
                   value={pinInput}
                   onChange={(e) => {

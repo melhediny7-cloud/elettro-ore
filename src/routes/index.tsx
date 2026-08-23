@@ -88,16 +88,15 @@ function AppHome() {
       const storedCompany = localStorage.getItem("oralavoro_companyName");
       const storedLoc = localStorage.getItem("oralavoro_defaultLocation");
       const storedLang = localStorage.getItem("oralavoro_lang") as Language;
-      const storedPin = localStorage.getItem("oralavoro_adminPin") || localStorage.getItem("oralavoro_admin_pin");
+
+      // Purge all credentials/PINs from localStorage
+      localStorage.removeItem("oralavoro_adminPin");
+      localStorage.removeItem("oralavoro_admin_pin");
+      localStorage.removeItem("oralavoro_worker_auth_id");
+      localStorage.removeItem("oralavoro_selected_worker_id");
 
       if (storedCompany) setCompanyName(storedCompany);
       if (storedLoc) setDefaultLocation(storedLoc);
-      if (storedPin && storedPin !== "1234") {
-        setAdminPin(storedPin);
-      } else {
-        setAdminPin("4159985");
-        localStorage.setItem("oralavoro_adminPin", "4159985");
-      }
       if (storedLang === "it" || storedLang === "ar") setLangState(storedLang);
       
       // Always start in worker mode with locked screen
@@ -116,7 +115,6 @@ function AppHome() {
         if (typeof window !== "undefined") {
           localStorage.setItem("oralavoro_defaultLocation", settings.defaultLocation);
           localStorage.setItem("oralavoro_companyName", settings.companyName);
-          localStorage.setItem("oralavoro_adminPin", resolvedPin);
         }
       }
     }).catch(console.error);
@@ -405,6 +403,11 @@ function AppHome() {
                 <input
                   type="password"
                   required
+                  autoComplete="new-password"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                  name="worker_pin_secure"
                   value={loginWorkerPin}
                   onChange={(e) => {
                     setLoginWorkerPin(e.target.value);
@@ -470,8 +473,7 @@ function AppHome() {
               onSubmit={(e) => {
                 e.preventDefault();
                 const inputTrimmed = adminLockPinInput.trim();
-                const currentSavedPin = typeof window !== "undefined" ? localStorage.getItem("oralavoro_adminPin") || adminPin || "4159985" : adminPin || "4159985";
-                if (inputTrimmed === currentSavedPin.trim() || inputTrimmed === "4159985") {
+                if (inputTrimmed === adminPin.trim() || inputTrimmed === "4159985") {
                   setUserRole("admin");
                   setActiveTab("timbratrice");
                   setIsAdminLockModalOpen(false);
@@ -487,6 +489,11 @@ function AppHome() {
                 type="password"
                 required
                 autoFocus
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                name="admin_pin_secure"
                 value={adminLockPinInput}
                 onChange={(e) => {
                   setAdminLockPinInput(e.target.value);
