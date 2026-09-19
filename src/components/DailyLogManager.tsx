@@ -63,6 +63,9 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   });
+  const [exportPhone, setExportPhone] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("oralavoro_managerPhone") || "" : ""
+  );
 
   const openNewModal = () => {
     // Manual log creation is restricted to admins only
@@ -433,8 +436,17 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
 
   const handleWorkerWhatsAppExport = () => {
     if (typeof window === "undefined") return;
-    const managerPhone = localStorage.getItem("oralavoro_managerPhone") || "";
-    const cleanPhone = managerPhone.replace(/[^0-9]/g, "");
+    const cleanPhone = exportPhone.replace(/[^0-9+]/g, "");
+    if (!cleanPhone) {
+      alert(
+        lang === "ar"
+          ? "⚠️ يرجى إدخال رقم واتساب المدير أولاً في الحقل أعلاه!"
+          : "⚠️ Inserisci prima il numero WhatsApp del responsabile!"
+      );
+      return;
+    }
+    // Save phone for next time
+    localStorage.setItem("oralavoro_managerPhone", exportPhone);
     const workerName = selectedWorker?.name || "Lavoratore";
     const msg =
       `📋 *طلب مراجعة ساعات العمل / RIEPILOGO ORE*\n` +
@@ -1161,7 +1173,42 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
             </div>
 
             {/* Action Buttons */}
-            <div className="p-5 border-t border-slate-100 space-y-2">
+            <div className="p-5 border-t border-slate-100 space-y-3">
+
+              {/* WhatsApp phone number input */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 space-y-2">
+                <label className="block text-xs font-bold text-emerald-800 uppercase tracking-wider">
+                  📲 {lang === "ar" ? "رقم واتساب المدير (للإرسال):" : "Numero WhatsApp Responsabile:"}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="tel"
+                    dir="ltr"
+                    value={exportPhone}
+                    onChange={(e) => setExportPhone(e.target.value)}
+                    placeholder={lang === "ar" ? "+39 351 000 0000 أو +20 100 000 0000" : "+39 351 000 0000"}
+                    className="flex-1 px-3 py-2 bg-white border border-emerald-300 rounded-lg text-sm font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder:font-normal placeholder:text-slate-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (exportPhone) {
+                        localStorage.setItem("oralavoro_managerPhone", exportPhone);
+                        alert(lang === "ar" ? "✅ تم حفظ الرقم!" : "✅ Numero salvato!");
+                      }
+                    }}
+                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-all"
+                  >
+                    {lang === "ar" ? "💾 حفظ" : "💾 Salva"}
+                  </button>
+                </div>
+                <p className="text-[11px] text-emerald-700 font-medium">
+                  {lang === "ar"
+                    ? "⚠️ أدخل الرقم مع كود الدولة (+39 للإيطاليا / +20 لمصر)"
+                    : "⚠️ Includi il prefisso internazionale (+39 per Italia)"}
+                </p>
+              </div>
+
               <button
                 onClick={handleWorkerPrintPDF}
                 disabled={workerExportLogs.length === 0}
@@ -1181,7 +1228,7 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
                   className="py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
                 >
                   <MessageSquare className="w-3.5 h-3.5" />
-                  <span>{lang === "ar" ? "📲 واتساب للمدير" : "📲 WhatsApp al Manager"}</span>
+                  <span>{lang === "ar" ? "📲 إرسال عبر واتساب" : "📲 Invia su WhatsApp"}</span>
                 </button>
                 <button
                   onClick={handleWorkerEmailExport}
