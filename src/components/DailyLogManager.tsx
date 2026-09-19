@@ -182,45 +182,47 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
       return;
     }
 
-    // AUTOMATIC GPS & STRICT 3KM GEOFENCE VERIFICATION
+    // GPS & GEOFENCE: only enforced for workers — admin can log from anywhere
     let currentLat = formData.latitude;
     let currentLng = formData.longitude;
     let currentAddr = formData.address;
 
-    if (!currentLat || !currentLng) {
-      if (typeof navigator !== "undefined" && navigator.geolocation) {
-        try {
-          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              enableHighAccuracy: true,
-              timeout: 10000,
+    if (userRole !== "admin") {
+      if (!currentLat || !currentLng) {
+        if (typeof navigator !== "undefined" && navigator.geolocation) {
+          try {
+            const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(resolve, reject, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+              });
             });
-          });
-          currentLat = String(pos.coords.latitude);
-          currentLng = String(pos.coords.longitude);
-          currentAddr = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
-        } catch (e) {
-          alert(
-            lang === "ar"
-              ? "⚠️ تنبيه أمني: لا يمكن تسجيل الساعات بدون تفعيل خدمة الـ GPS في الهاتف وإعطاء الإذن للمتصفح!"
-              : "⚠️ Impossibile salvare senza autorizzare la posizione GPS attiva sul dispositivo!"
-          );
+            currentLat = String(pos.coords.latitude);
+            currentLng = String(pos.coords.longitude);
+            currentAddr = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
+          } catch (e) {
+            alert(
+              lang === "ar"
+                ? "⚠️ تنبيه أمني: لا يمكن تسجيل الساعات بدون تفعيل خدمة الـ GPS في الهاتف وإعطاء الإذن للمتصفح!"
+                : "⚠️ Impossibile salvare senza autorizzare la posizione GPS attiva sul dispositivo!"
+            );
+            return;
+          }
+        } else {
+          alert("Geolocalizzazione GPS non supportata da questo dispositivo.");
           return;
         }
-      } else {
-        alert("Geolocalizzazione GPS non supportata da questo dispositivo.");
+      }
+
+      const check = verifyWorkerGeofence(currentLat, currentLng, workplaceZone);
+      if (!check.allowed) {
+        alert(
+          lang === "ar"
+            ? `❌ تم رفض تسجيل الساعات! أنت متواجد خارج موقع العمل (${check.distanceKm} كم من ${workplaceZone.name}). الحد الأقصى المسموح به هو ${workplaceZone.radiusKm} كم.`
+            : `❌ Registrazione Rifiutata: Sei fuori dalla zona di lavoro autorizzata (Distanza: ${check.distanceKm} km > ${workplaceZone.radiusKm} km dal cantiere).`
+        );
         return;
       }
-    }
-
-    const check = verifyWorkerGeofence(currentLat, currentLng, workplaceZone);
-    if (!check.allowed) {
-      alert(
-        lang === "ar"
-          ? `❌ تم رفض تسجيل الساعات! أنت متواجد خارج موقع العمل (${check.distanceKm} كم من ${workplaceZone.name}). الحد الأقصى المسموح به هو ${workplaceZone.radiusKm} كم.`
-          : `❌ Registrazione Rifiutata: Sei fuori dalla zona di lavoro autorizzata (Distanza: ${check.distanceKm} km > ${workplaceZone.radiusKm} km dal cantiere).`
-      );
-      return;
     }
 
     setLoading(true);
@@ -756,6 +758,10 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
                     <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
                       <Check className="w-3.5 h-3.5" /> GPS Verificato
                     </span>
+                  ) : userRole === "admin" ? (
+                    <span className="text-[11px] font-bold text-slate-400">
+                      {lang === "ar" ? "GPS اختياري للمدير" : "GPS Opzionale (Admin)"}
+                    </span>
                   ) : (
                     <span className="text-[11px] font-bold text-amber-600">
                       GPS Non Rilevato
@@ -783,6 +789,8 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
                     className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
                       formData.latitude
                         ? "bg-emerald-600 text-white shadow-sm"
+                        : userRole === "admin"
+                        ? "bg-slate-200 hover:bg-slate-300 text-slate-700"
                         : "bg-blue-600 hover:bg-blue-700 text-white animate-pulse"
                     }`}
                   >
