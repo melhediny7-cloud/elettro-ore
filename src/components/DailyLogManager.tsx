@@ -1,7 +1,7 @@
-import React, { useState } from "react";
-import { Plus, Trash2, Edit2, MapPin, Search, Calendar, Clock, ExternalLink, Navigation, Check, X, RefreshCw, Coins, User, Users, Lock, ShieldCheck, HardHat } from "lucide-react";
+import React, { useState, useMemo } from "react";
+import { Plus, Trash2, Edit2, MapPin, Search, Calendar, Clock, ExternalLink, Navigation, Check, X, RefreshCw, Coins, User, Users, Lock, ShieldCheck, HardHat, FileText, Printer, MessageSquare, Mail, ChevronLeft, ChevronRight } from "lucide-react";
 import { WorkLogEntry, WorkerProfile, WorkSite, createWorkLog, updateWorkLog, deleteWorkLog, clearAllWorkLogs, calculateNetHours, calculateTotalPay } from "../utils/api";
-import { formatDateIT, getCurrentDateISO, PRESET_LOCATIONS_IT, WORK_TYPES_IT, reverseGeocode, parseWorkplaceZone, verifyWorkerGeofence } from "../utils/italian";
+import { formatDateIT, getCurrentDateISO, PRESET_LOCATIONS_IT, WORK_TYPES_IT, MONTHS_IT, getDayNameIT, reverseGeocode, parseWorkplaceZone, verifyWorkerGeofence } from "../utils/italian";
 import { translations, Language } from "../utils/i18n";
 
 interface DailyLogManagerProps {
@@ -58,6 +58,11 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
 
   const [geoLoading, setGeoLoading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showWorkerExport, setShowWorkerExport] = useState(false);
+  const [exportSelectedMonth, setExportSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
 
   const openNewModal = () => {
     // Manual log creation is restricted to admins only
@@ -311,6 +316,177 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
     return matchesSearch && matchesType && matchesWorker && matchesCantiere;
   });
 
+  // ── Worker PDF Export helpers ──────────────────────────────────────────────
+  const [exportYear, exportMonthNum] = exportSelectedMonth.split("-");
+  const exportMonthName = MONTHS_IT.find((m) => m.value === exportMonthNum)?.name || exportMonthNum;
+
+  const workerExportLogs = useMemo(() => {
+    if (!selectedWorker) return [];
+    return logs
+      .filter((log) => {
+        const isMyLog =
+          (log.workerId && log.workerId === selectedWorker.id) ||
+          (log.workerName &&
+            log.workerName.trim().toLowerCase() === selectedWorker.name.trim().toLowerCase());
+        return isMyLog && log.date && log.date.startsWith(exportSelectedMonth);
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [logs, selectedWorker, exportSelectedMonth]);
+
+  const workerExportTotalHours = workerExportLogs.reduce(
+    (acc, l) => acc + (parseFloat(l.totalHours) || 0),
+    0
+  );
+
+  const handleWorkerPrintPDF = () => {
+    const workerName = selectedWorker?.name || "Lavoratore";
+    const rows = workerExportLogs
+      .map((log) => {
+        const dayName = getDayNameIT(log.date);
+        return `<tr>
+          <td>${log.date}</td>
+          <td>${dayName}</td>
+          <td><b>${log.startTime}</b></td>
+          <td><b>${log.endTime || "-"}</b></td>
+          <td style="text-align:center;">${log.breakMinutes || 0} min</td>
+          <td style="font-weight:900;color:#1d4ed8;text-align:center;">${log.totalHours} h</td>
+          <td>${log.workType || "Ordinario"}</td>
+          <td>${log.locationName || ""}</td>
+          <td style="color:#64748b;">${log.notes || "-"}</td>
+        </tr>`;
+      })
+      .join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Scheda Ore - ${workerName} - ${exportMonthName} ${exportYear}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,sans-serif;padding:24px;font-size:12px;color:#1e293b}
+    table{width:100%;border-collapse:collapse;margin-top:16px}
+    th{background:#1e293b;color:#fff;padding:8px;text-align:left;font-size:10px;text-transform:uppercase}
+    td{padding:6px 8px;border-bottom:1px solid #e2e8f0}
+    tr:nth-child(even) td{background:#f8fafc}
+    .total-row td{background:#1e293b!important;color:#fff;font-weight:bold;padding:8px;border:none}
+    .header-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin:16px 0}
+    .lbl{font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase}
+    .val{font-size:14px;font-weight:900;margin-top:3px}
+    .sig{margin-top:48px;display:grid;grid-template-columns:1fr 1fr;gap:48px}
+    .sig-line{border-top:1px solid #94a3b8;padding-top:6px;font-size:10px;color:#64748b}
+    @media print{body{padding:8px}}
+  </style>
+</head>
+<body>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1e293b;padding-bottom:16px;margin-bottom:16px;">
+    <div>
+      <div style="font-size:20px;font-weight:900;text-transform:uppercase;letter-spacing:-0.5px;">SCHEDA ORE DI LAVORO</div>
+      <div style="font-size:13px;font-weight:700;margin-top:2px;">بطاقة ساعات العمل الرسمية</div>
+      <div style="font-size:11px;color:#3b82f6;font-weight:600;margin-top:4px;">Registro Ufficiale Presenze — ElettroOre Italia</div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:18px;font-weight:900;text-transform:uppercase;">${exportMonthName} ${exportYear}</div>
+      <div style="font-size:10px;color:#94a3b8;margin-top:2px;">DOCUMENTO UFFICIALE</div>
+    </div>
+  </div>
+  <div class="header-grid">
+    <div><div class="lbl">Lavoratore / العامل</div><div class="val">${workerName}</div></div>
+    <div><div class="lbl">Periodo / الفترة</div><div class="val">${exportMonthName} ${exportYear}</div></div>
+    <div><div class="lbl">Ore Totali / إجمالي الساعات</div><div class="val" style="color:#1d4ed8;">${workerExportTotalHours.toFixed(2)} h</div></div>
+    <div><div class="lbl">Giorni Lavorati / أيام العمل</div><div class="val" style="color:#059669;">${workerExportLogs.length} gg</div></div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Data / التاريخ</th><th>Giorno / اليوم</th><th>Entrata / دخول</th>
+        <th>Uscita / خروج</th><th>Pausa / استراحة</th><th>Ore / الساعات</th>
+        <th>Tipo / النوع</th><th>Cantiere / الموقع</th><th>Note / ملاحظات</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+      <tr class="total-row">
+        <td colspan="5" style="text-align:right;padding-right:12px;">TOTALE / المجموع:</td>
+        <td style="font-size:14px;">${workerExportTotalHours.toFixed(2)} h</td>
+        <td colspan="3" style="font-size:11px;opacity:0.8;">${workerExportLogs.length} giorni / يوم عمل</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="sig">
+    <div><div class="sig-line">Firma Lavoratore / توقيع العامل<br><b>${workerName}</b></div></div>
+    <div><div class="sig-line">Firma Responsabile / توقيع المدير<br><span style="color:#94a3b8;">_________________________</span></div></div>
+  </div>
+  <p style="text-align:center;margin-top:24px;font-size:10px;color:#94a3b8;border-top:1px solid #f1f5f9;padding-top:12px;">
+    Generato da ElettroOre Italia — ${new Date().toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" })}
+  </p>
+  <script>setTimeout(()=>window.print(),400);</script>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+    }
+  };
+
+  const handleWorkerWhatsAppExport = () => {
+    if (typeof window === "undefined") return;
+    const managerPhone = localStorage.getItem("oralavoro_managerPhone") || "";
+    const cleanPhone = managerPhone.replace(/[^0-9]/g, "");
+    const workerName = selectedWorker?.name || "Lavoratore";
+    const msg =
+      `📋 *طلب مراجعة ساعات العمل / RIEPILOGO ORE*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `👤 *العامل / LAVORATORE:*\n👉 *${workerName}* 👈\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `📅 *الشهر / MESE:* ${exportMonthName} ${exportYear}\n` +
+      `⏱️ *إجمالي الساعات / ORE TOTALI:* ${workerExportTotalHours.toFixed(2)} h\n` +
+      `🗓️ *أيام العمل / GIORNI LAVORATI:* ${workerExportLogs.length} giorni\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `_الرجاء مراجعة الساعات والتوقيع على الاستمارة الرسمية_\n` +
+      `_Si prega di verificare e firmare la scheda ufficiale_\n` +
+      `_— ElettroOre Italia_`;
+    window.open(
+      `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`,
+      "_blank"
+    );
+  };
+
+  const handleWorkerEmailExport = () => {
+    const workerName = selectedWorker?.name || "Lavoratore";
+    const subject = encodeURIComponent(
+      `Scheda Ore Lavoro - ${workerName} - ${exportMonthName} ${exportYear}`
+    );
+    const body = encodeURIComponent(
+      `Gentile Responsabile / مدير محترم،\n\n` +
+        `نرسل لكم ملخص ساعات العمل — Riepilogo ore di lavoro:\n\n` +
+        `👤 Lavoratore / العامل: ${workerName}\n` +
+        `📅 Periodo / الفترة: ${exportMonthName} ${exportYear}\n` +
+        `⏱️ Ore Totali / إجمالي الساعات: ${workerExportTotalHours.toFixed(2)} h\n` +
+        `🗓️ Giorni Lavorati / أيام العمل: ${workerExportLogs.length} giorni\n\n` +
+        `يرجى مراجعة الساعات والتوقيع.\nSi prega di verificare e firmare.\n\n` +
+        `Cordiali saluti,\n${workerName}\n— ElettroOre Italia`
+    );
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
+  const handleExportPrevMonth = () => {
+    let m = parseInt(exportMonthNum, 10) - 1;
+    let y = parseInt(exportYear, 10);
+    if (m < 1) { m = 12; y -= 1; }
+    setExportSelectedMonth(`${y}-${String(m).padStart(2, "0")}`);
+  };
+
+  const handleExportNextMonth = () => {
+    let m = parseInt(exportMonthNum, 10) + 1;
+    let y = parseInt(exportYear, 10);
+    if (m > 12) { m = 1; y += 1; }
+    setExportSelectedMonth(`${y}-${String(m).padStart(2, "0")}`);
+  };
+  // ── End Worker PDF Export helpers ──────────────────────────────────────────
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       
@@ -345,12 +521,15 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
             </button>
           )}
 
-          {/* Worker info badge */}
+          {/* Worker: PDF export button */}
           {userRole === "worker" && (
-            <span className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 text-slate-600 border border-slate-200 text-xs font-bold rounded-xl">
-              <Lock className="w-3.5 h-3.5 text-slate-400" />
-              <span>{lang === "ar" ? "التسجيل اليدوي للمدير فقط" : "Registrazione manuale: solo Admin"}</span>
-            </span>
+            <button
+              onClick={() => setShowWorkerExport(true)}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-md transition-all"
+            >
+              <FileText className="w-4 h-4" />
+              <span>{lang === "ar" ? "📄 إرسال ساعاتي كـ PDF" : "📄 Invia Ore come PDF"}</span>
+            </button>
           )}
         </div>
       </div>
@@ -847,6 +1026,173 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── WORKER PDF EXPORT MODAL ─────────────────────────────────────── */}
+      {showWorkerExport && (
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 print:hidden animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[92vh]">
+
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-indigo-100 text-indigo-700 rounded-xl flex items-center justify-center">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {lang === "ar" ? "استمارة الساعات الرسمية 📄" : "Scheda Ore Ufficiale 📄"}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {lang === "ar"
+                      ? "اختر الشهر ثم اطبع أو أرسل ساعاتك"
+                      : "Seleziona il mese poi stampa o invia le tue ore"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowWorkerExport(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Month Selector */}
+            <div className="px-5 pt-4 flex items-center justify-center gap-3">
+              <button
+                onClick={handleExportPrevMonth}
+                className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 transition-all"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <div className="text-center">
+                <div className="text-lg font-black text-slate-900 uppercase tracking-wide">
+                  {exportMonthName} {exportYear}
+                </div>
+                <div className="text-xs text-slate-400 font-medium">
+                  {lang === "ar" ? "الشهر المحدد" : "Mese selezionato"}
+                </div>
+              </div>
+              <button
+                onClick={handleExportNextMonth}
+                className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 transition-all"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="px-5 pt-3 grid grid-cols-3 gap-3">
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-center">
+                <div className="text-xs text-blue-600 font-semibold uppercase tracking-wide">
+                  {lang === "ar" ? "إجمالي الساعات" : "Ore Totali"}
+                </div>
+                <div className="text-2xl font-black text-blue-800 mt-0.5">
+                  {workerExportTotalHours.toFixed(2)} h
+                </div>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
+                <div className="text-xs text-emerald-600 font-semibold uppercase tracking-wide">
+                  {lang === "ar" ? "أيام العمل" : "Giorni Lavorati"}
+                </div>
+                <div className="text-2xl font-black text-emerald-800 mt-0.5">
+                  {workerExportLogs.length}
+                </div>
+              </div>
+              <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-center">
+                <div className="text-xs text-indigo-600 font-semibold uppercase tracking-wide">
+                  {lang === "ar" ? "العامل" : "Lavoratore"}
+                </div>
+                <div className="text-sm font-black text-indigo-800 mt-0.5 truncate">
+                  {selectedWorker?.name || "-"}
+                </div>
+              </div>
+            </div>
+
+            {/* Log Preview Table */}
+            <div className="flex-1 overflow-y-auto px-5 py-3">
+              {workerExportLogs.length === 0 ? (
+                <div className="text-center py-10 text-slate-400">
+                  <Calendar className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                  <p className="text-sm font-semibold">
+                    {lang === "ar"
+                      ? "لا توجد ساعات مسجلة لهذا الشهر"
+                      : "Nessuna ora registrata per questo mese"}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-800 text-white">
+                      <tr>
+                        <th className="px-3 py-2">{lang === "ar" ? "التاريخ" : "Data"}</th>
+                        <th className="px-3 py-2">{lang === "ar" ? "الدخول" : "Entrata"}</th>
+                        <th className="px-3 py-2">{lang === "ar" ? "الخروج" : "Uscita"}</th>
+                        <th className="px-3 py-2">{lang === "ar" ? "الساعات" : "Ore"}</th>
+                        <th className="px-3 py-2">{lang === "ar" ? "الموقع" : "Cantiere"}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {workerExportLogs.map((log, i) => (
+                        <tr key={log.id || i} className="hover:bg-slate-50">
+                          <td className="px-3 py-2 font-mono font-semibold">{log.date}</td>
+                          <td className="px-3 py-2 font-bold text-emerald-700">{log.startTime}</td>
+                          <td className="px-3 py-2 font-bold text-rose-600">{log.endTime || "-"}</td>
+                          <td className="px-3 py-2 font-black text-blue-700">{log.totalHours} h</td>
+                          <td className="px-3 py-2 text-slate-600 truncate max-w-[120px]">{log.locationName}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-800 text-white font-bold">
+                        <td className="px-3 py-2 text-right" colSpan={3}>
+                          {lang === "ar" ? "المجموع:" : "TOTALE:"}
+                        </td>
+                        <td className="px-3 py-2 text-blue-300">{workerExportTotalHours.toFixed(2)} h</td>
+                        <td className="px-3 py-2 text-slate-400 text-[11px]">{workerExportLogs.length} {lang === "ar" ? "يوم" : "giorni"}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="p-5 border-t border-slate-100 space-y-2">
+              <button
+                onClick={handleWorkerPrintPDF}
+                disabled={workerExportLogs.length === 0}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+              >
+                <Printer className="w-4 h-4" />
+                <span>
+                  {lang === "ar"
+                    ? "🖨️ طباعة / تحميل كـ PDF (استمارة رسمية)"
+                    : "🖨️ Stampa / Salva come PDF (Scheda Ufficiale)"}
+                </span>
+              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={handleWorkerWhatsAppExport}
+                  disabled={workerExportLogs.length === 0}
+                  className="py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>{lang === "ar" ? "📲 واتساب للمدير" : "📲 WhatsApp al Manager"}</span>
+                </button>
+                <button
+                  onClick={handleWorkerEmailExport}
+                  disabled={workerExportLogs.length === 0}
+                  className="py-2.5 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>{lang === "ar" ? "📧 إرسال بالإيميل" : "📧 Invia Email"}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
