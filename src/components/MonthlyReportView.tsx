@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Printer, Download, Calendar, Clock, MapPin, Award, FileSpreadsheet, Building2, User, ChevronLeft, ChevronRight, Coins, Filter, Users, PenTool, Check, ShieldCheck, MessageSquare, Send, HardHat, Mail } from "lucide-react";
+import { Printer, Download, Calendar, Clock, MapPin, Award, FileSpreadsheet, Building2, User, ChevronLeft, ChevronRight, Coins, Filter, Users, PenTool, Check, ShieldCheck, MessageSquare, Send, HardHat, Mail, FileText, RefreshCw } from "lucide-react";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -15,6 +15,7 @@ import { MONTHS_IT, WORK_TYPES_IT, formatDateIT, getDayNameIT } from "../utils/i
 import { translations, Language } from "../utils/i18n";
 import { SignaturePad } from "./SignaturePad";
 import { generateExcelReport } from "../utils/excelExport";
+import { generatePdfBlobFromElement, sharePdfToWhatsApp } from "../utils/pdfExport";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -43,6 +44,7 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, work
 
   const [signatureWorker, setSignatureWorker] = useState<string | null>(null);
   const [signatureManager, setSignatureManager] = useState<string | null>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   useEffect(() => {
     if (userRole === "worker" && selectedWorker) {
@@ -267,28 +269,60 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({ logs, work
     return found ? found.name : selectedWorkerFilter;
   }, [selectedWorkerFilter, workers, t]);
 
-  const handleSendWhatsAppReport = () => {
-    const managerPhone = typeof window !== "undefined" ? localStorage.getItem("oralavoro_managerPhone") || "" : "";
-    const cleanPhone = managerPhone.replace(/[^0-9]/g, "");
+  const handleDownloadPDF = async () => {
+    const el = document.getElementById("printable-monthly-report");
+    if (!el) {
+      window.print();
+      return;
+    }
+    setIsGeneratingPdf(true);
+    try {
+      const workerName = selectedWorker ? selectedWorker.name : currentDisplayWorkerName;
+      const workerTag = workerName.replace(/\s+/g, "_");
+      const filename = `Scheda_Ore_${workerTag}_${selectedMonthName}_${selectedYear}.pdf`;
+      await generatePdfBlobFromElement(el, filename);
+    } catch (e) {
+      console.error("PDF generation failed, falling back to window.print", e);
+      window.print();
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const handleSendWhatsAppReport = async () => {
+    const managerPhone =
+      typeof window !== "undefined"
+        ? localStorage.getItem("oralavoro_managerPhone") || ""
+        : "";
     const workerName = selectedWorker ? selectedWorker.name : currentDisplayWorkerName;
-    const isSigned = !!signatureWorker;
-    const daysCount = monthlyLogs.length;
-    const totalHoursStr = totalMonthlyHours.toFixed(2);
+    const workerTag = workerName.replace(/\s+/g, "_");
+    const filename = `Scheda_Ore_${workerTag}_${selectedMonthName}_${selectedYear}.pdf`;
+    const el = document.getElementById("printable-monthly-report");
 
-    const msg = `📋 *REPORT MENSILE ORE DI LAVORO / تقرير الساعات الشهري*
-━━━━━━━━━━━━━━━━━━━━━
-👤 *LAVORATORE / اسم العامل:*
-👉 *${workerName}* 👈
-━━━━━━━━━━━━━━━━━━━━━
-📅 *MESE / الشهر:* ${selectedMonthName} ${selectedYear}
-⏱️ *ORE TOTALI / إجمالي الساعات:* ${totalHoursStr} ore
-🗓️ *GIORNI LAVORATI / أيام العمل:* ${daysCount} giorni
-✍️ *STATO FIRMA / التوقيع:* ${isSigned ? "✅ Firmato digitalmente (تم التوقيع باليد)" : "⏳ In attesa di firma"}
-━━━━━━━━━━━━━━━━━━━━━
-_Inviato da ElettroOre Italia_`;
+    if (!el) {
+      window.print();
+      return;
+    }
 
-    const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
-    window.open(waUrl, "_blank");
+    setIsGeneratingPdf(true);
+    try {
+      await sharePdfToWhatsApp({
+        element: el,
+        fileName: filename,
+        phone: managerPhone,
+        workerName: workerName,
+        monthName: selectedMonthName,
+        year: selectedYear,
+        totalHours: totalMonthlyHours.toFixed(2),
+        totalDays: monthlyLogs.length,
+        lang: lang,
+      });
+    } catch (e) {
+      console.error("Error sharing PDF to WhatsApp", e);
+      window.print();
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   };
 
   const handleExportExcel = () => {
@@ -444,14 +478,26 @@ _Inviato da ElettroOre Italia_`;
               <span>{signatureWorker || signatureManager ? (lang === "ar" ? "✍️ التوقيع الرقمي (موقع)" : "✍️ Firme Inserite") : (lang === "ar" ? "✍️ توقيع التقرير" : "✍️ Firma PDF")}</span>
             </button>
 
+            {/* Direct Official PDF Download Button */}
+            <button
+              type="button"
+              disabled={isGeneratingPdf}
+              onClick={handleDownloadPDF}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all whitespace-nowrap cursor-pointer"
+            >
+              {isGeneratingPdf ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+              <span>{lang === "ar" ? "📄 تحميل استمارة PDF" : "📄 Scarica Scheda PDF"}</span>
+            </button>
+
             {/* Instant WhatsApp Send Button */}
             <button
               type="button"
+              disabled={isGeneratingPdf}
               onClick={handleSendWhatsAppReport}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all whitespace-nowrap cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition-all whitespace-nowrap cursor-pointer"
             >
-              <MessageSquare className="w-4 h-4" />
-              <span>{lang === "ar" ? "📲 إرسال الساعات للمدير عبر واتساب" : "📲 Invia Ore su WhatsApp"}</span>
+              {isGeneratingPdf ? <RefreshCw className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}
+              <span>{lang === "ar" ? "📲 إرسال استمارة PDF (واتساب)" : "📲 Invia PDF su WhatsApp"}</span>
             </button>
 
             {/* Instant Email Send Button */}
@@ -469,7 +515,7 @@ _Inviato da ElettroOre Italia_`;
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-md transition-all whitespace-nowrap cursor-pointer"
             >
               <Printer className="w-4 h-4" />
-              <span>{t.btnPrint}</span>
+              <span>{lang === "ar" ? "🖨️ طباعة / حفظ PDF" : "🖨️ Stampa / Salva PDF"}</span>
             </button>
 
             {/* Real Excel (.xls / SpreadsheetML) Export Button */}
@@ -610,7 +656,7 @@ _Inviato da ElettroOre Italia_`;
       {/* ========================================================================= */}
       {/* OFFICIAL PRINTABLE MONTHLY REPORT SHEET (A4 Print Formatted) */}
       {/* ========================================================================= */}
-      <div className="bg-white p-6 sm:p-10 rounded-2xl border border-slate-300 shadow-lg print:border-none print:shadow-none print:p-0 print:m-0">
+      <div id="printable-monthly-report" className="bg-white p-6 sm:p-10 rounded-2xl border border-slate-300 shadow-lg print:border-none print:shadow-none print:p-0 print:m-0">
         
         {/* Document Header */}
         <div className="border-b-2 border-slate-900 pb-6 mb-6">

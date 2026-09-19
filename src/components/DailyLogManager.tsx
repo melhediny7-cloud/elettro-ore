@@ -448,22 +448,22 @@ export const DailyLogManager: React.FC<DailyLogManagerProps> = ({
     // Save phone for next time
     localStorage.setItem("oralavoro_managerPhone", exportPhone);
     const workerName = selectedWorker?.name || "Lavoratore";
+
+    // Step 1: Open the PDF page so user can save/download it
+    handleWorkerPrintPDF();
+
+    // Step 2: After PDF opens, launch WhatsApp with a short note
     const msg =
-      `📋 *طلب مراجعة ساعات العمل / RIEPILOGO ORE*\n` +
-      `━━━━━━━━━━━━━━━━━━━━━\n` +
-      `👤 *العامل / LAVORATORE:*\n👉 *${workerName}* 👈\n` +
-      `━━━━━━━━━━━━━━━━━━━━━\n` +
-      `📅 *الشهر / MESE:* ${exportMonthName} ${exportYear}\n` +
-      `⏱️ *إجمالي الساعات / ORE TOTALI:* ${workerExportTotalHours.toFixed(2)} h\n` +
-      `🗓️ *أيام العمل / GIORNI LAVORATI:* ${workerExportLogs.length} giorni\n` +
-      `━━━━━━━━━━━━━━━━━━━━━\n` +
-      `_الرجاء مراجعة الساعات والتوقيع على الاستمارة الرسمية_\n` +
-      `_Si prega di verificare e firmare la scheda ufficiale_\n` +
-      `_— ElettroOre Italia_`;
-    window.open(
-      `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`,
-      "_blank"
-    );
+      lang === "ar"
+        ? `📄 السلام عليكم،\nأنا *${workerName}* أرسل لك استمارة ساعات العمل الشهرية.\n\n📅 الشهر: *${exportMonthName} ${exportYear}*\n⏱️ إجمالي الساعات: *${workerExportTotalHours.toFixed(2)} h*\n🗓️ أيام العمل: *${workerExportLogs.length} يوم*\n\n📎 *يرجى مراجعة ملف PDF المرفق والتوقيع عليه.*\n\n_— ElettroOre Italia_`
+        : `📄 Salve,\nSono *${workerName}* — invio la scheda mensile ore.\n\n📅 Mese: *${exportMonthName} ${exportYear}*\n⏱️ Ore Totali: *${workerExportTotalHours.toFixed(2)} h*\n🗓️ Giorni Lavorati: *${workerExportLogs.length}*\n\n📎 *Si prega di verificare il PDF allegato e firmarlo.*\n\n_— ElettroOre Italia_`;
+
+    setTimeout(() => {
+      window.open(
+        `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`,
+        "_blank"
+      );
+    }, 1500);
   };
 
   const handleWorkerEmailExport = () => {
